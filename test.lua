@@ -3858,8 +3858,8 @@ end
 local function GetKeyFromFile()
     local key = nil
     local paths = {
-        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/Xthrlen.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/Xthrlen.txt"
+        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ADMOB_VIP_KEY.txt",
+        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_VIP_KEY.txt"
     }
     for _, path in ipairs(paths) do
         local file = io.open(path, "r")
@@ -3876,7 +3876,7 @@ local function AuthenticateAndStartMod()
     if not key or key == "" then
         pcall(function()
             local Msg = require("client.slua.logic.common.logic_common_msg_box")
-            if Msg and Msg.Show then Msg.Show(4, "LỖI ĐĂNG NHẬP", "Không tìm thấy file Key (Xthrlen.txt)!\nVui lòng nhận Key trên web và lưu vào file.", nil, nil, "ĐÓNG") end
+            if Msg and Msg.Show then Msg.Show(4, "LỖI ĐĂNG NHẬP", "Không tìm thấy file Key (AKMOD_VIP_KEY.txt)!\nVui lòng nhận Key trên web và lưu vào file.", nil, nil, "ĐÓNG") end
         end)
         return
     end
