@@ -3908,7 +3908,6 @@ local function AuthenticateAndStartMod()
 
     local key = GetKeyFromFile()
     if not key or key == "" then
-        -- Dùng AkmodNotify có chữ "Lỗi" để nó vừa vô Chat vừa bung bảng y chang hình
         _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)! Vui lòng nhận Key trên web và lưu vào thư mục Paks.")
         return
     end
@@ -3930,9 +3929,13 @@ local function AuthenticateAndStartMod()
         }
         local postData = "key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
         
+        -- 👉 ĐÂY LÀ ĐÒN CHỐT HẠ: Nối thẳng data vào đuôi URL để ép Server nhận 100%
+        local FINAL_URL = SERVER_AUTH_URL .. "?" .. postData
+        
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, resp)
+        -- Gửi lệnh Post với cái FINAL_URL đã được độ chế
+        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
