@@ -3771,39 +3771,73 @@ _G.XthrlenState.LoopToken = (_G.XthrlenState.LoopToken or 0) + 1
 local myToken = _G.XthrlenState.LoopToken
 
 -- =======================================================
--- CHỐT CHẶN BẢO MẬT: MẶC ĐỊNH KHÓA MOD KHI VỪA TẢI XONG
+-- CHỐT CHẶN BẢO MẬT & THÔNG BÁO CAO CẤP AKMOD
 -- =======================================================
 _G._Authenticated_ = false
 
+_G.AkmodNotify = function(msg)
+  print("[AKMOD] Notify: " .. tostring(msg))
+  pcall(function()
+    -- [1] Thông báo chung (Hiện giữa màn hình)
+    local s4, LocUtil = pcall(require, "common.loc_util")
+    if s4 and LocUtil and LocUtil.ShowNotice then
+      LocUtil.ShowNotice("AKMOD: " .. msg)
+    end
+
+    -- [2] Tip Trận & Bảng thông báo
+    local s3, IngameTipsTools = pcall(require, "GameLua.Mod.BaseMod.Common.UI.InGameTipsTools")
+    if s3 and IngameTipsTools then
+      if IngameTipsTools.BattleNormalTips then
+        IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3)
+      end
+      
+      -- Nếu có chữ Lỗi/Từ chối thì mới bung cái bảng bự ra
+      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") then
+        if IngameTipsTools.ShowMsgBox then
+          IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg)
+        end
+      end
+    end
+
+    -- [3] Thông báo Chat (Trận)
+    local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
+    if s and GameplayData then
+      local uPlayerController = GameplayData.GetPlayerController()
+      if uPlayerController then
+        local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
+        if s2 and STExtraBlueprintFunctionLibrary then
+          local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
+          if chatComp and chatComp.AddMsgInClient then
+            chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>")
+          end
+        end
+      end
+    end
+  end)
+end
+
 local function ExpiredTick()
     if not _G.XthrlenNotifiedPopup then
+        _G.AkmodNotify("Lỗi: MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!")
+        _G.XthrlenNotifiedPopup = true 
         pcall(function()
-            local Msg = require("client.slua.logic.common.logic_common_msg_box")
-            if Msg and Msg.Show then
-                Msg.Show(1, "MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian", 
-                function() local Web = require("client.slua.logic.url.logic_webview_sdk"); if Web and Web.OpenURL then Web:OpenURL("https://t.me/ngocdoian") end end, 
-                function() end, "INBOX CHỦ MOD", "ĐÓNG")
-                _G.XthrlenNotifiedPopup = true 
-            end
-        end)
-        if not _G.XthrlenNotifiedPopup then
             local okTicker, ticker = pcall(require, "common.time_ticker") 
             if okTicker and ticker and ticker.AddTimerOnce then ticker.AddTimerOnce(2.0, ExpiredTick) end
-        end
+        end)
     end
 end
 
 function _G.FastTick() 
     if isExpired then 
         if not _G.XthrlenNotifiedExpire then
-            Notify("MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian")
+            _G.AkmodNotify("Lỗi: MOD ĐÃ HẾT HẠN!")
             _G.XthrlenNotifiedExpire = true
             ExpiredTick() 
         end
         return 
     end
 
-    -- 🛑 NẾU CHƯA XÁC THỰC KEY THÀNH CÔNG THÌ DỪNG LẠI, KHÔNG CHO CHẠY HACK
+    -- 🛑 CHỐT CHẶN: CHƯA AUTHENTICATE THÌ ĐỨNG IM KHÔNG CHO CHẠY
     if myToken ~= _G.XthrlenState.LoopToken or not _G._Authenticated_ then return end
 
     pcall(MainLoop) 
@@ -3856,10 +3890,10 @@ end
 
 local function GetKeyFromFile()
     local key = nil
-    -- ĐÃ SỬA THÀNH ĐÚNG TÊN AKMOD_KEY_VIP.txt NÍ MUỐN NHA
     local paths = {
         "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
+        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
+        "/storage/emulated/0/Android/data/com.vng.pubgmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
     }
     for _, path in ipairs(paths) do
         local file = io.open(path, "r")
@@ -3874,10 +3908,8 @@ local function AuthenticateAndStartMod()
 
     local key = GetKeyFromFile()
     if not key or key == "" then
-        pcall(function()
-            local Msg = require("client.slua.logic.common.logic_common_msg_box")
-            if Msg and Msg.Show then Msg.Show(4, "LỖI ĐĂNG NHẬP", "Không tìm thấy file Key (AKMOD_KEY_VIP.txt)!\nVui lòng nhận Key trên web và lưu vào thư mục Paks.", nil, nil, "ĐÓNG") end
-        end)
+        -- Dùng AkmodNotify có chữ "Lỗi" để nó vừa vô Chat vừa bung bảng y chang hình
+        _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)! Vui lòng nhận Key trên web và lưu vào thư mục Paks.")
         return
     end
 
@@ -3898,6 +3930,8 @@ local function AuthenticateAndStartMod()
         }
         local postData = "key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
         
+        _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
+
         http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
@@ -3916,7 +3950,9 @@ local function AuthenticateAndStartMod()
                     
                     -- ✅ KHI KEY ĐÚNG -> BẬT CÔNG TẮC VÀ KÍCH NỔ HACK
                     _G._Authenticated_ = true
-                    Notify("Xác thực Key thành công! Chào mừng VIP.")
+                    
+                    local msgMatch = string.match(decrypted, '"msg":"(.-)"')
+                    _G.AkmodNotify(msgMatch or "Xác thực Key thành công! Chào mừng VIP.")
                     
                     if not isExpired then
                         if _G.InitModMenuTab then _G.InitModMenuTab() end
@@ -3928,16 +3964,10 @@ local function AuthenticateAndStartMod()
                 else
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
                     local errMsg = msgMatch or "Sai Key hoặc Key đã hết hạn!"
-                    pcall(function()
-                        local Msg = require("client.slua.logic.common.logic_common_msg_box")
-                        if Msg and Msg.Show then Msg.Show(4, "TỪ CHỐI TRUY CẬP", "Lỗi: " .. errMsg, nil, nil, "ĐÓNG") end
-                    end)
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
                 end
             else
-                pcall(function()
-                    local Msg = require("client.slua.logic.common.logic_common_msg_box")
-                    if Msg and Msg.Show then Msg.Show(4, "LỖI MẠNG", "Không thể kết nối đến máy chủ AKMOD.ONLINE", nil, nil, "ĐÓNG") end
-                end)
+                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE")
             end
         end, 10)
     end
