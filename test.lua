@@ -3770,31 +3770,30 @@ end
 _G.XthrlenState.LoopToken = (_G.XthrlenState.LoopToken or 0) + 1 
 local myToken = _G.XthrlenState.LoopToken
 
+-- =======================================================
+-- CHỐT CHẶN BẢO MẬT: MẶC ĐỊNH KHÓA MOD KHI VỪA TẢI XONG
+-- =======================================================
+_G._Authenticated_ = false
+
 local function ExpiredTick()
     if not _G.XthrlenNotifiedPopup then
         pcall(function()
             local Msg = require("client.slua.logic.common.logic_common_msg_box")
             if Msg and Msg.Show then
                 Msg.Show(1, "MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian", 
-                function() 
-                    local Web = require("client.slua.logic.url.logic_webview_sdk")
-                    if Web and Web.OpenURL then Web:OpenURL("https://t.me/ngocdoian") end 
-                end, 
+                function() local Web = require("client.slua.logic.url.logic_webview_sdk"); if Web and Web.OpenURL then Web:OpenURL("https://t.me/ngocdoian") end end, 
                 function() end, "INBOX CHỦ MOD", "ĐÓNG")
                 _G.XthrlenNotifiedPopup = true 
             end
         end)
-        
         if not _G.XthrlenNotifiedPopup then
             local okTicker, ticker = pcall(require, "common.time_ticker") 
-            if okTicker and ticker and ticker.AddTimerOnce then 
-                ticker.AddTimerOnce(2.0, ExpiredTick) 
-            end
+            if okTicker and ticker and ticker.AddTimerOnce then ticker.AddTimerOnce(2.0, ExpiredTick) end
         end
     end
 end
 
-local function FastTick() 
+function _G.FastTick() 
     if isExpired then 
         if not _G.XthrlenNotifiedExpire then
             Notify("MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian")
@@ -3804,11 +3803,13 @@ local function FastTick()
         return 
     end
 
-    if myToken ~= _G.XthrlenState.LoopToken then return end
+    -- 🛑 NẾU CHƯA XÁC THỰC KEY THÀNH CÔNG THÌ DỪNG LẠI, KHÔNG CHO CHẠY HACK
+    if myToken ~= _G.XthrlenState.LoopToken or not _G._Authenticated_ then return end
+
     pcall(MainLoop) 
     local okTicker, ticker = pcall(require, "common.time_ticker") 
     if okTicker and ticker and ticker.AddTimerOnce then 
-        ticker.AddTimerOnce(0.01, FastTick) 
+        ticker.AddTimerOnce(0.01, _G.FastTick) 
     end 
 end
 
@@ -3830,13 +3831,11 @@ local function decBase64(data)
         return r;
     end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
         if (#x ~= 8) then return '' end
-        local c=0
-        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
-        return string.char(c)
+        local c=0; for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end; return string.char(c)
     end))
 end
 
--- Hàm XOR cùi bắp nhưng an toàn trên mọi Engine
+-- Hàm XOR 
 local function _t2_bxor(a, b)
     local r, p = 0, 1
     for _ = 1, 8 do
@@ -3857,9 +3856,10 @@ end
 
 local function GetKeyFromFile()
     local key = nil
+    -- ĐÃ SỬA THÀNH ĐÚNG TÊN AKMOD_KEY_VIP.txt NÍ MUỐN NHA
     local paths = {
-        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ADMOB_VIP_KEY.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_VIP_KEY.txt"
+        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
+        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
     }
     for _, path in ipairs(paths) do
         local file = io.open(path, "r")
@@ -3876,7 +3876,7 @@ local function AuthenticateAndStartMod()
     if not key or key == "" then
         pcall(function()
             local Msg = require("client.slua.logic.common.logic_common_msg_box")
-            if Msg and Msg.Show then Msg.Show(4, "LỖI ĐĂNG NHẬP", "Không tìm thấy file Key (AKMOD_VIP_KEY.txt)!\nVui lòng nhận Key trên web và lưu vào file.", nil, nil, "ĐÓNG") end
+            if Msg and Msg.Show then Msg.Show(4, "LỖI ĐĂNG NHẬP", "Không tìm thấy file Key (AKMOD_KEY_VIP.txt)!\nVui lòng nhận Key trên web và lưu vào thư mục Paks.", nil, nil, "ĐÓNG") end
         end)
         return
     end
@@ -3892,7 +3892,6 @@ local function AuthenticateAndStartMod()
     end
     
     if http and http.Post then
-        -- KHIÊN 1: Gửi Header bảo mật
         local headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
             ["x-akmod-auth"] = AUTH_HEADER
@@ -3901,11 +3900,9 @@ local function AuthenticateAndStartMod()
         
         http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
-                -- BƯỚC 1: Giải mã Base64
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
                 
-                -- BƯỚC 2: Giải mã XOR theo mảng 16 byte của Server
                 local decrypted = ""
                 pcall(function()
                     for i = 1, #decoded do
@@ -3915,17 +3912,20 @@ local function AuthenticateAndStartMod()
                     end
                 end)
 
-                -- BƯỚC 3: Kiểm tra cục JSON đã giải mã
                 if string.find(decrypted, '"status":true') then
+                    
+                    -- ✅ KHI KEY ĐÚNG -> BẬT CÔNG TẮC VÀ KÍCH NỔ HACK
+                    _G._Authenticated_ = true
                     Notify("Xác thực Key thành công! Chào mừng VIP.")
+                    
                     if not isExpired then
+                        if _G.InitModMenuTab then _G.InitModMenuTab() end
                         if _G.FastTick then _G.FastTick() end
                     end
                     pcall(function() 
                         if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end 
                     end)
                 else
-                    -- Lấy lý do lỗi từ Server để báo cho khách
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
                     local errMsg = msgMatch or "Sai Key hoặc Key đã hết hạn!"
                     pcall(function()
@@ -3943,7 +3943,7 @@ local function AuthenticateAndStartMod()
     end
 end
 
--- Kích hoạt quá trình check lúc file vừa load xong
+-- Bắt đầu quá trình xác thực khi file vừa tải về xong
 pcall(function() 
     require("common.time_ticker").AddTimerOnce(1.0, AuthenticateAndStartMod) 
 end)
