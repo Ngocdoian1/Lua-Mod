@@ -3949,13 +3949,13 @@ local function AuthenticateAndStartMod()
         local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
         local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
-        -- 👉 ĐÒN CHÍ MẠNG: Ép Key và HWID thành ĐƯỜNG DẪN API (Path Parameter)
-        local FINAL_URL = SERVER_AUTH_URL .. "/" .. safe_key .. "/" .. safe_hwid
-        local postData = "game_id=LUAPAK"
+        -- 👉 ĐÒN CHÍ MẠNG CUỐI CÙNG: Nhét SẠCH SÀNH SANH vô URL, để trống Body ("") luôn cho Game khỏi phá!
+        local FINAL_URL = SERVER_AUTH_URL .. "/" .. safe_key .. "/" .. safe_hwid .. "?game_id=LUAPAK"
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
+        -- Truyền cữ chuỗi rỗng "" vào postData
+        http:Post(FINAL_URL, headers, "", nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
