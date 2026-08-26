@@ -3944,26 +3944,26 @@ local function AuthenticateAndStartMod()
         local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
         local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
-        -- 👉 BẢO HIỂM LỚP 1: Nhét thẳng Key và HWID vào Header bảo mật! (Bất tử 1000%)
+        -- 👉 ĐÒN SÁT THỦ 1 TỶ PHẦN TRĂM: Nhét thẳng Key và HWID vào Header!
         local headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
             ["x-akmod-auth"] = AUTH_HEADER,
-            ["akmod-key"] = safe_key,
-            ["akmod-hwid"] = safe_hwid
+            ["x-akmod-key"] = safe_key,
+            ["x-akmod-hwid"] = safe_hwid
         }
         
-        -- 👉 BẢO HIỂM LỚP 2 & 3: Nhét vô Bụng (Body) và Đuôi Link (URL)
-        local postData = "key=" .. safe_key .. "&hwid=" .. safe_hwid .. "&game_id=LUAPAK"
-        local FINAL_URL = SERVER_AUTH_URL .. "?key=" .. safe_key .. "&hwid=" .. safe_hwid
+        -- Dùng lại link gốc cho sạch đẹp, quăng đại 1 rác vô body để lừa game
+        local FINAL_URL = SERVER_AUTH_URL
+        local postData = "ping=pong"
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 
-                -- Bắt bài nếu Server văng lỗi 404/500
+                -- Bắt bài nếu Server văng lỗi 404/500 do Nginx
                 if string.find(resp, '"status":false') or string.find(resp, "html") then
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ.")
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (HTML/404).")
                     return
                 end
 
