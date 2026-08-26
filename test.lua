@@ -3945,13 +3945,13 @@ local function AuthenticateAndStartMod()
             ["x-akmod-auth"] = AUTH_HEADER
         }
         
-        -- Áp dụng mã hóa URL để đóng thùng kín bưng
-        local safe_key = URLEncode(key)
-        local safe_hwid = URLEncode(hwid)
-        local postData = string.format("key=%s&hwid=%s&game_id=LUAPAK", safe_key, safe_hwid)
+        -- Hút sạch mọi khoảng trắng tàng hình làm gãy link
+        local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
+        local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
-        -- Kẹp 2 đường luôn, Server thích đớp ở đâu thì đớp, 1000% không trượt!
-        local FINAL_URL = SERVER_AUTH_URL .. "?" .. postData
+        -- 👉 ĐÒN CHÍ MẠNG: Ép Key và HWID thành ĐƯỜNG DẪN API (Path Parameter)
+        local FINAL_URL = SERVER_AUTH_URL .. "/" .. safe_key .. "/" .. safe_hwid
+        local postData = "game_id=LUAPAK"
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
@@ -3994,7 +3994,7 @@ local function AuthenticateAndStartMod()
     end
 end
 
--- Ép delay 3.0 giây để đảm bảo Game load xong, bảng UI chắc chắn hiện lên
+-- Delay 3s cho game bung bảng mượt mà
 pcall(function() 
     require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
 end)
