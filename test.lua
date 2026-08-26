@@ -3936,19 +3936,31 @@ local function AuthenticateAndStartMod()
     end
     
     if http and http.Post then
+        -- MÁY XAY RÁC: Dọn dẹp sạch sẽ khoảng trắng tàng hình
+        local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
+        local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
+        
+        -- 👉 ĐÒN SÁT THỦ: Nối chung với Mật Khẩu, cách nhau bằng "---"
+        local combined_auth = AUTH_HEADER .. "---" .. safe_key .. "---" .. safe_hwid
+        
         local headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
-            ["x-akmod-auth"] = AUTH_HEADER
+            ["x-akmod-auth"] = combined_auth  -- Truyền lệnh bài tàng hình
         }
         
-        -- Truyền Bụng (Body) tiêu chuẩn, sạch bóng rác tàng hình!
-        local postData = "key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
         local FINAL_URL = SERVER_AUTH_URL
+        local postData = "game_id=LUAPAK"
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
+                
+                -- Bắt bài nếu Server văng lỗi HTML/404
+                if string.find(resp, '"status":false') or string.find(resp, "html") then
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (HTML/404).")
+                    return
+                end
 
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
@@ -3963,6 +3975,7 @@ local function AuthenticateAndStartMod()
                 end)
 
                 if string.find(decrypted, '"status":true') then
+                    
                     _G._Authenticated_ = true
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
                     _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
@@ -3976,7 +3989,7 @@ local function AuthenticateAndStartMod()
                     end)
                 else
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    local errMsg = msgMatch or "Sai Key hoặc Key đã hết hạn!"
+                    local errMsg = msgMatch or ("Lỗi dữ liệu: " .. string.sub(tostring(resp), 1, 20))
                     _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
                 end
             else
