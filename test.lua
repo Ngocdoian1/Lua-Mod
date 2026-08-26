@@ -3919,6 +3919,49 @@ local function AuthenticateAndStartMod()
     if _G.AuthTriggered_AK then return end
     _G.AuthTriggered_AK = true
 
+    local function GetKeyFromFile()
+    local key = nil
+    local paths = {
+        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
+        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
+        "/storage/emulated/0/Android/data/com.vng.pubgmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
+    }
+    for _, path in ipairs(paths) do
+        local file = io.open(path, "r")
+        if file then 
+            key = file:read("*a"); 
+            file:close(); 
+            if key and key ~= "" then 
+                -- Máy diệt rác tàng hình của Windows
+                if string.byte(key, 1) == 239 and string.byte(key, 2) == 187 and string.byte(key, 3) == 191 then
+                    key = string.sub(key, 4)
+                end
+                key = string.gsub(key, "[%s\r\n]", ""); 
+                break 
+            end 
+        end
+    end
+    return key
+end
+
+-- 👉 THÊM HÀM MÃ HÓA BASE64 MỚI CỨNG (Để đóng gói gửi lên Server)
+local function encBase64(data)
+    return ((data:gsub('.', function(x) 
+        local r,b='',x:byte()
+        for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
+        if (#x < 6) then return '' end
+        local c=0
+        for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
+        return b64chars:sub(c+1,c+1)
+    end)..({ '', '==', '=' })[#data%3+1])
+end
+
+local function AuthenticateAndStartMod()
+    if _G.AuthTriggered_AK then return end
+    _G.AuthTriggered_AK = true
+
     local key = GetKeyFromFile()
     if not key or key == "" then
         _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)!\nVui lòng nhận Key trên web và lưu vào thư mục Paks.")
@@ -3936,16 +3979,20 @@ local function AuthenticateAndStartMod()
     end
     
     if http and http.Post then
-        -- MÁY XAY RÁC: Dọn dẹp sạch sẽ khoảng trắng tàng hình
+        -- Xay nhuyễn rác tàng hình
         local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
         local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
-        -- 👉 ĐÒN SÁT THỦ: Nối chung với Mật Khẩu, cách nhau bằng "---"
-        local combined_auth = AUTH_HEADER .. "---" .. safe_key .. "---" .. safe_hwid
+        -- 👉 ĐÒN CHỐT HẠ: Đóng gói 2 cục này thành chuỗi Base64
+        local payload = safe_key .. ":" .. safe_hwid
+        local payload_b64 = encBase64(payload)
+        
+        -- Ghép vô Mật Khẩu bằng DẤU CHẤM (.) - Bất tử vượt qua mọi chốt chặn Cloudflare!
+        local combined_auth = AUTH_HEADER .. "." .. payload_b64
         
         local headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
-            ["x-akmod-auth"] = combined_auth  -- Lợi dụng cái ống khói này để chui vô!
+            ["x-akmod-auth"] = combined_auth 
         }
         
         local FINAL_URL = SERVER_AUTH_URL
@@ -3955,10 +4002,9 @@ local function AuthenticateAndStartMod()
 
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
-                
-                -- Bắt bài nếu Server văng lỗi HTML/404
+
                 if string.find(resp, '"status":false') or string.find(resp, "html") then
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (HTML/404).")
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (Kiểm tra lại VPS).")
                     return
                 end
 
@@ -3975,7 +4021,6 @@ local function AuthenticateAndStartMod()
                 end)
 
                 if string.find(decrypted, '"status":true') then
-                    
                     _G._Authenticated_ = true
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
                     _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
@@ -3989,7 +4034,7 @@ local function AuthenticateAndStartMod()
                     end)
                 else
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    local errMsg = msgMatch or ("Lỗi dữ liệu: " .. string.sub(tostring(resp), 1, 20))
+                    local errMsg = msgMatch or ("Lỗi giải mã: " .. string.sub(tostring(resp), 1, 20))
                     _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
                 end
             else
@@ -3999,7 +4044,6 @@ local function AuthenticateAndStartMod()
     end
 end
 
--- Delay 3s cho game bung bảng mượt mà
 pcall(function() 
     require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
 end)
