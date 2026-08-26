@@ -3778,10 +3778,10 @@ _G._Authenticated_ = false
 _G.AkmodNotify = function(msg)
   print("[AKMOD] Notify: " .. tostring(msg))
   pcall(function()
-    -- [1] Thông báo chung (Hiện giữa màn hình)
-    local s4, LocUtil = pcall(require, "common.loc_util")
-    if s4 and LocUtil and LocUtil.ShowNotice then
-      LocUtil.ShowNotice("AKMOD: " .. msg)
+    -- [1] Ép buộc hiện chữ to đùng trên màn hình (Bất tử, không bao giờ xịt)
+    local sh = import("ScriptHelperClient")
+    if sh and sh.AddOnScreenDebugMessage then
+      sh.AddOnScreenDebugMessage("AKMOD: " .. msg, -1, 6.0, {R=1, G=1, B=0, A=1}, {X=1.3, Y=1.3})
     end
 
     -- [2] Tip Trận & Bảng thông báo
@@ -3795,21 +3795,6 @@ _G.AkmodNotify = function(msg)
       if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") then
         if IngameTipsTools.ShowMsgBox then
           IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg)
-        end
-      end
-    end
-
-    -- [3] Thông báo Chat (Trận)
-    local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
-    if s and GameplayData then
-      local uPlayerController = GameplayData.GetPlayerController()
-      if uPlayerController then
-        local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
-        if s2 and STExtraBlueprintFunctionLibrary then
-          local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
-          if chatComp and chatComp.AddMsgInClient then
-            chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>")
-          end
         end
       end
     end
@@ -3908,7 +3893,7 @@ local function AuthenticateAndStartMod()
 
     local key = GetKeyFromFile()
     if not key or key == "" then
-        _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)! Vui lòng nhận Key trên web và lưu vào thư mục Paks.")
+        _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)!\nVui lòng nhận Key trên web và lưu vào thư mục Paks.")
         return
     end
 
@@ -3922,24 +3907,22 @@ local function AuthenticateAndStartMod()
         http = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
     end
     
-        if http and http.Post then
-        -- Trả về chuẩn cũ mà Game nó chịu hiểu
+    if http and http.Post then
+        -- 👉 ĐÒN SÁT THỦ: Gửi chuẩn JSON, bao đớp mọi Engine
         local headers = {
-            ["Content-Type"] = "application/x-www-form-urlencoded",
+            ["Content-Type"] = "application/json",
             ["x-akmod-auth"] = AUTH_HEADER
         }
         
-        -- Dữ liệu giả lập để nhét vô bụng
-        local postData = "game_id=LUAPAK"
+        -- Gói vào cục JSON xịn sò
+        local postData = string.format('{"key":"%s","hwid":"%s","game_id":"LUAPAK"}', tostring(key), tostring(hwid))
         
-        -- 👉 ĐÒN CHÍ MẠNG: NHÉT THẲNG KEY VÀ HWID LÊN CÁI LINK URL LUÔN!
+        -- Trói thêm vào Link URL luôn cho 1000% không trượt
         local FINAL_URL = SERVER_AUTH_URL .. "?key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        -- Gửi lệnh Post lên cái FINAL_URL
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
-
             if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
@@ -3976,11 +3959,11 @@ local function AuthenticateAndStartMod()
             else
                 _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE")
             end
-        end, 10)
+        end, 15)
     end
+end
 
-
--- Bắt đầu quá trình xác thực khi file vừa tải về xong
+-- Ép delay 3 giây để đảm bảo Game load xong mới hiện Bảng Thông Báo
 pcall(function() 
-    require("common.time_ticker").AddTimerOnce(1.0, AuthenticateAndStartMod) 
+    require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
 end)
