@@ -3922,20 +3922,24 @@ local function AuthenticateAndStartMod()
         http = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
     end
     
-    if http and http.Post then
+        if http and http.Post then
+        -- Trả về chuẩn cũ mà Game nó chịu hiểu
         local headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
             ["x-akmod-auth"] = AUTH_HEADER
         }
-        local postData = "key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
         
-        -- 👉 ĐÂY LÀ ĐÒN CHỐT HẠ: Nối thẳng data vào đuôi URL để ép Server nhận 100%
-        local FINAL_URL = SERVER_AUTH_URL .. "?" .. postData
+        -- Dữ liệu giả lập để nhét vô bụng
+        local postData = "game_id=LUAPAK"
+        
+        -- 👉 ĐÒN CHÍ MẠNG: NHÉT THẲNG KEY VÀ HWID LÊN CÁI LINK URL LUÔN!
+        local FINAL_URL = SERVER_AUTH_URL .. "?key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        -- Gửi lệnh Post với cái FINAL_URL đã được độ chế
+        -- Gửi lệnh Post lên cái FINAL_URL
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
+
             if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
@@ -3974,7 +3978,7 @@ local function AuthenticateAndStartMod()
             end
         end, 10)
     end
-end
+
 
 -- Bắt đầu quá trình xác thực khi file vừa tải về xong
 pcall(function() 
