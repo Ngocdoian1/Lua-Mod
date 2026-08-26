@@ -3945,7 +3945,7 @@ local function AuthenticateAndStartMod()
         
         local headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
-            ["x-akmod-auth"] = combined_auth  -- Truyền lệnh bài tàng hình
+            ["x-akmod-auth"] = combined_auth  -- Lợi dụng cái ống khói này để chui vô!
         }
         
         local FINAL_URL = SERVER_AUTH_URL
