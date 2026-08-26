@@ -3940,7 +3940,7 @@ local function AuthenticateAndStartMod()
     end
     
     if http and http.Post then
-        -- MÁY XAY RÁC: Dọn dẹp sạch sẽ khoảng trắng tàng hình
+        -- MÁY XAY RÁC: Hút sạch mọi khoảng trắng tàng hình
         local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
         local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
@@ -3960,9 +3960,9 @@ local function AuthenticateAndStartMod()
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 
-                -- Bắt bài nếu Server văng lỗi HTML/404
+                -- Bắt bài nếu Server văng lỗi HTML/404 do Nginx
                 if string.find(resp, '"status":false') or string.find(resp, "html") then
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (HTML/404).")
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (Kiểm tra lại Server).")
                     return
                 end
 
