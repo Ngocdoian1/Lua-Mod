@@ -3778,23 +3778,38 @@ _G._Authenticated_ = false
 _G.AkmodNotify = function(msg)
   print("[AKMOD] Notify: " .. tostring(msg))
   pcall(function()
-    -- [1] Ép buộc hiện chữ to đùng trên màn hình (Bất tử, không bao giờ xịt)
-    local sh = import("ScriptHelperClient")
-    if sh and sh.AddOnScreenDebugMessage then
-      sh.AddOnScreenDebugMessage("AKMOD: " .. msg, -1, 6.0, {R=1, G=1, B=0, A=1}, {X=1.3, Y=1.3})
+    -- [1] Thông báo chung 
+    local s4, LocUtil = pcall(require, "common.loc_util")
+    if s4 and LocUtil and LocUtil.ShowNotice then
+      LocUtil.ShowNotice("AKMOD: " .. msg)
     end
 
-    -- [2] Tip Trận & Bảng thông báo
+    -- [2] Tip Trận
     local s3, IngameTipsTools = pcall(require, "GameLua.Mod.BaseMod.Common.UI.InGameTipsTools")
     if s3 and IngameTipsTools then
       if IngameTipsTools.BattleNormalTips then
         IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3)
       end
       
-      -- Nếu có chữ Lỗi/Từ chối thì mới bung cái bảng bự ra
-      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") then
+      -- Đã thêm chữ "Thành công" để khi đúng Key nó cũng bung bảng cho VIP
+      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") or string.find(msg, "Thành công") then
         if IngameTipsTools.ShowMsgBox then
           IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg)
+        end
+      end
+    end
+
+    -- [3] Thông báo Chat (Trận)
+    local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
+    if s and GameplayData then
+      local uPlayerController = GameplayData.GetPlayerController()
+      if uPlayerController then
+        local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
+        if s2 and STExtraBlueprintFunctionLibrary then
+          local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
+          if chatComp and chatComp.AddMsgInClient then
+            chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>")
+          end
         end
       end
     end
@@ -3839,7 +3854,6 @@ local SERVER_AUTH_URL = "https://akmod.online/api/check_free"
 local AUTH_HEADER = "####ngocdoianXnanamod96####"
 local XOR_KEY = {0x7B, 0x21, 0xC5, 0xE2, 0x9A, 0x3F, 0x44, 0x10, 0xD8, 0x6C, 0xB2, 0x0E, 0x55, 0xA9, 0x71, 0x3D}
 
--- Hàm giải mã Base64
 local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 local function decBase64(data)
     data = string.gsub(data, '[^'..b64chars..'=]', '')
@@ -3854,7 +3868,6 @@ local function decBase64(data)
     end))
 end
 
--- Hàm XOR 
 local function _t2_bxor(a, b)
     local r, p = 0, 1
     for _ = 1, 8 do
@@ -3887,6 +3900,15 @@ local function GetKeyFromFile()
     return key
 end
 
+-- Hàm mã hóa URL chống gãy Link
+local function URLEncode(str)
+    if not str then return "" end
+    str = string.gsub(str, "\n", "\r\n")
+    str = string.gsub(str, "([^%w %-%_%.%~])", function(c) return string.format("%%%02X", string.byte(c)) end)
+    str = string.gsub(str, " ", "+")
+    return str
+end
+
 local function AuthenticateAndStartMod()
     if _G.AuthTriggered_AK then return end
     _G.AuthTriggered_AK = true
@@ -3908,24 +3930,23 @@ local function AuthenticateAndStartMod()
     end
     
     if http and http.Post then
-        -- 👉 ĐÒN SÁT THỦ: Gửi chuẩn JSON, bao đớp mọi Engine
         local headers = {
-            ["Content-Type"] = "application/json",
+            ["Content-Type"] = "application/x-www-form-urlencoded",
             ["x-akmod-auth"] = AUTH_HEADER
         }
         
-        -- Gói vào cục JSON xịn sò
-        local postData = string.format('{"key":"%s","hwid":"%s","game_id":"LUAPAK"}', tostring(key), tostring(hwid))
+        -- 👉 ĐÒN CHÍ MẠNG: Mã hóa URL Encode để loại bỏ 100% khoảng trắng và ký tự lạ của Game
+        local safe_key = URLEncode(tostring(key))
+        local safe_hwid = URLEncode(tostring(hwid))
+        local postData = string.format("key=%s&hwid=%s&game_id=LUAPAK", safe_key, safe_hwid)
         
-        -- Trói thêm vào Link URL luôn cho 1000% không trượt
-        local FINAL_URL = SERVER_AUTH_URL .. "?key=" .. tostring(key) .. "&hwid=" .. tostring(hwid) .. "&game_id=LUAPAK"
-        
+        -- Dùng đúng chuẩn của file cũ đã từng thành công
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
-            if success and type(resp) == "string" and #resp > 10 then
+        http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, data, content, result)
+            if success and type(data) == "string" and #data > 10 then
                 local decoded = ""
-                pcall(function() decoded = decBase64(resp) end)
+                pcall(function() decoded = decBase64(data) end)
                 
                 local decrypted = ""
                 pcall(function()
@@ -3942,7 +3963,7 @@ local function AuthenticateAndStartMod()
                     _G._Authenticated_ = true
                     
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    _G.AkmodNotify(msgMatch or "Xác thực Key thành công! Chào mừng VIP.")
+                    _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
                     
                     if not isExpired then
                         if _G.InitModMenuTab then _G.InitModMenuTab() end
@@ -3954,16 +3975,16 @@ local function AuthenticateAndStartMod()
                 else
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
                     local errMsg = msgMatch or "Sai Key hoặc Key đã hết hạn!"
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
+                    _G.AkmodNotify("Lỗi Từ chối truy cập: " .. errMsg)
                 end
             else
-                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE")
+                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE (Mã: " .. tostring(result or "NIL") .. ")")
             end
         end, 15)
     end
 end
 
--- Ép delay 3 giây để đảm bảo Game load xong mới hiện Bảng Thông Báo
+-- Delay 3 giây để HUD Ingame kịp load, bung Notify cho mượt
 pcall(function() 
     require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
 end)
