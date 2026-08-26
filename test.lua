@@ -3935,18 +3935,15 @@ local function AuthenticateAndStartMod()
             ["x-akmod-auth"] = AUTH_HEADER
         }
         
-        -- 👉 ĐÒN CHÍ MẠNG: Mã hóa URL Encode để loại bỏ 100% khoảng trắng và ký tự lạ của Game
-        local safe_key = URLEncode(tostring(key))
-        local safe_hwid = URLEncode(tostring(hwid))
-        local postData = string.format("key=%s&hwid=%s&game_id=LUAPAK", safe_key, safe_hwid)
+        -- Dữ liệu gói gọn gàng, không cần nhét lên đuôi Link URL nữa
+        local postData = string.format("key=%s&hwid=%s&game_id=LUAPAK", tostring(key), tostring(hwid))
         
-        -- Dùng đúng chuẩn của file cũ đã từng thành công
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, data, content, result)
-            if success and type(data) == "string" and #data > 10 then
+        http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, resp)
+            if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
-                pcall(function() decoded = decBase64(data) end)
+                pcall(function() decoded = decBase64(resp) end)
                 
                 local decrypted = ""
                 pcall(function()
@@ -3959,10 +3956,9 @@ local function AuthenticateAndStartMod()
 
                 if string.find(decrypted, '"status":true') then
                     
-                    -- ✅ KHI KEY ĐÚNG -> BẬT CÔNG TẮC VÀ KÍCH NỔ HACK
                     _G._Authenticated_ = true
-                    
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
+                    -- Có chữ "Thành công" để kích hoạt bung bảng UI thông báo
                     _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
                     
                     if not isExpired then
@@ -3975,16 +3971,16 @@ local function AuthenticateAndStartMod()
                 else
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
                     local errMsg = msgMatch or "Sai Key hoặc Key đã hết hạn!"
-                    _G.AkmodNotify("Lỗi Từ chối truy cập: " .. errMsg)
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
                 end
             else
-                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE (Mã: " .. tostring(result or "NIL") .. ")")
+                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE")
             end
         end, 15)
     end
 end
 
--- Delay 3 giây để HUD Ingame kịp load, bung Notify cho mượt
+-- Ép delay 3.0 giây để đảm bảo Game load xong, bảng UI chắc chắn hiện lên
 pcall(function() 
     require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
 end)
