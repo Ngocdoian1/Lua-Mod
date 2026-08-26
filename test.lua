@@ -3883,7 +3883,10 @@ local function GetDeviceID()
     pcall(function() local SystemUtil = import("SystemUtil"); if SystemUtil and SystemUtil.GetAndroidID then deviceID = SystemUtil:GetAndroidID() or "" end end)
     if deviceID == "" then pcall(function() deviceID = os.getenv("ANDROID_ID") or os.getenv("DEVICE_ID") or "" end) end
     if deviceID == "" then pcall(function() local settings = import("GameUserSettings"); if settings then deviceID = tostring(settings:GetUniqueNetId()) end end) end
-    return deviceID or "UNKNOWN"
+    
+    -- 👉 MÁY XAY RÁC: Hút sạch 100% dấu cách, dấu enter tàng hình làm gãy link
+    local safe_id = string.gsub(tostring(deviceID or "UNKNOWN"), "[%s\r\n]", "")
+    return safe_id
 end
 
 local function GetKeyFromFile()
@@ -3895,15 +3898,22 @@ local function GetKeyFromFile()
     }
     for _, path in ipairs(paths) do
         local file = io.open(path, "r")
-        if file then key = file:read("*a"); file:close(); if key and key ~= "" then key = key:gsub("%s+", ""); break end end
+        if file then 
+            key = file:read("*a"); 
+            file:close(); 
+            if key and key ~= "" then 
+                -- 👉 MÁY XAY RÁC 2: Hút sạch khoảng trắng dư thừa lúc khách lỡ tay copy dính
+                key = string.gsub(key, "[%s\r\n]", ""); 
+                break 
+            end 
+        end
     end
     return key
 end
 
--- Hàm mã hóa URL chống gãy Link
+-- Hàm mã hóa URL siêu cứng, chống gãy Link
 local function URLEncode(str)
     if not str then return "" end
-    str = string.gsub(str, "\n", "\r\n")
     str = string.gsub(str, "([^%w %-%_%.%~])", function(c) return string.format("%%%02X", string.byte(c)) end)
     str = string.gsub(str, " ", "+")
     return str
@@ -3935,12 +3945,17 @@ local function AuthenticateAndStartMod()
             ["x-akmod-auth"] = AUTH_HEADER
         }
         
-        -- Dữ liệu gói gọn gàng, không cần nhét lên đuôi Link URL nữa
-        local postData = string.format("key=%s&hwid=%s&game_id=LUAPAK", tostring(key), tostring(hwid))
+        -- Áp dụng mã hóa URL để đóng thùng kín bưng
+        local safe_key = URLEncode(key)
+        local safe_hwid = URLEncode(hwid)
+        local postData = string.format("key=%s&hwid=%s&game_id=LUAPAK", safe_key, safe_hwid)
+        
+        -- Kẹp 2 đường luôn, Server thích đớp ở đâu thì đớp, 1000% không trượt!
+        local FINAL_URL = SERVER_AUTH_URL .. "?" .. postData
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        http:Post(SERVER_AUTH_URL, headers, postData, nil, function(success, resp)
+        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
@@ -3958,7 +3973,6 @@ local function AuthenticateAndStartMod()
                     
                     _G._Authenticated_ = true
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    -- Có chữ "Thành công" để kích hoạt bung bảng UI thông báo
                     _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
                     
                     if not isExpired then
