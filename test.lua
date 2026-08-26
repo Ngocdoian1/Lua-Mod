@@ -3940,29 +3940,30 @@ local function AuthenticateAndStartMod()
     end
     
     if http and http.Post then
-        local headers = {
-            ["Content-Type"] = "application/x-www-form-urlencoded",
-            ["x-akmod-auth"] = AUTH_HEADER
-        }
-        
-        -- 👉 ĐÒN CHÍ MẠNG: Hút sạch 100% mọi khoảng trắng, dấu enter làm gãy link
+        -- MÁY XAY RÁC: Hút sạch mọi khoảng trắng tàng hình
         local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
         local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
-        -- Gói vào Body
-        local postData = "key=" .. safe_key .. "&hwid=" .. safe_hwid .. "&game_id=LUAPAK"
+        -- 👉 BẢO HIỂM LỚP 1: Nhét thẳng Key và HWID vào Header bảo mật! (Bất tử 1000%)
+        local headers = {
+            ["Content-Type"] = "application/x-www-form-urlencoded",
+            ["x-akmod-auth"] = AUTH_HEADER,
+            ["akmod-key"] = safe_key,
+            ["akmod-hwid"] = safe_hwid
+        }
         
-        -- Nhét luôn vào Đuôi Link (Bảo hiểm 2 lớp, Server Node.js nhắm mắt cũng đớp được)
-        local FINAL_URL = SERVER_AUTH_URL .. "?" .. postData
+        -- 👉 BẢO HIỂM LỚP 2 & 3: Nhét vô Bụng (Body) và Đuôi Link (URL)
+        local postData = "key=" .. safe_key .. "&hwid=" .. safe_hwid .. "&game_id=LUAPAK"
+        local FINAL_URL = SERVER_AUTH_URL .. "?key=" .. safe_key .. "&hwid=" .. safe_hwid
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
         http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
                 
-                -- Bắt lỗi nếu Server vả về 404 (chưa mã hóa)
-                if string.find(resp, '"status":false') or string.find(resp, "Sai URL API") then
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Server (404).")
+                -- Bắt bài nếu Server văng lỗi 404/500
+                if string.find(resp, '"status":false') or string.find(resp, "html") then
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ.")
                     return
                 end
 
@@ -3992,9 +3993,8 @@ local function AuthenticateAndStartMod()
                         if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end 
                     end)
                 else
-                    -- Lấy CHÍNH XÁC câu chửi từ Server Node.js trả về
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    local errMsg = msgMatch or ("Lỗi giải mã, dữ liệu rác: " .. string.sub(tostring(resp), 1, 20))
+                    local errMsg = msgMatch or ("Lỗi dữ liệu: " .. string.sub(tostring(resp), 1, 20))
                     _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
                 end
             else
