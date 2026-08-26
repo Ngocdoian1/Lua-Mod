@@ -3945,18 +3945,27 @@ local function AuthenticateAndStartMod()
             ["x-akmod-auth"] = AUTH_HEADER
         }
         
-        -- Hút sạch mọi khoảng trắng tàng hình làm gãy link
+        -- 👉 ĐÒN CHÍ MẠNG: Hút sạch 100% mọi khoảng trắng, dấu enter làm gãy link
         local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
         local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
         
-        -- 👉 ĐÒN CHÍ MẠNG CUỐI CÙNG: Nhét SẠCH SÀNH SANH vô URL, để trống Body ("") luôn cho Game khỏi phá!
-        local FINAL_URL = SERVER_AUTH_URL .. "/" .. safe_key .. "/" .. safe_hwid .. "?game_id=LUAPAK"
+        -- Gói vào Body
+        local postData = "key=" .. safe_key .. "&hwid=" .. safe_hwid .. "&game_id=LUAPAK"
+        
+        -- Nhét luôn vào Đuôi Link (Bảo hiểm 2 lớp, Server Node.js nhắm mắt cũng đớp được)
+        local FINAL_URL = SERVER_AUTH_URL .. "?" .. postData
         
         _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        -- Truyền cữ chuỗi rỗng "" vào postData
-        http:Post(FINAL_URL, headers, "", nil, function(success, resp)
+        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
             if success and type(resp) == "string" and #resp > 10 then
+                
+                -- Bắt lỗi nếu Server vả về 404 (chưa mã hóa)
+                if string.find(resp, '"status":false') or string.find(resp, "Sai URL API") then
+                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Server (404).")
+                    return
+                end
+
                 local decoded = ""
                 pcall(function() decoded = decBase64(resp) end)
                 
@@ -3983,8 +3992,9 @@ local function AuthenticateAndStartMod()
                         if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end 
                     end)
                 else
+                    -- Lấy CHÍNH XÁC câu chửi từ Server Node.js trả về
                     local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    local errMsg = msgMatch or "Sai Key hoặc Key đã hết hạn!"
+                    local errMsg = msgMatch or ("Lỗi giải mã, dữ liệu rác: " .. string.sub(tostring(resp), 1, 20))
                     _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
                 end
             else
