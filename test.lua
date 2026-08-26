@@ -3770,280 +3770,61 @@ end
 _G.XthrlenState.LoopToken = (_G.XthrlenState.LoopToken or 0) + 1 
 local myToken = _G.XthrlenState.LoopToken
 
--- =======================================================
--- CHỐT CHẶN BẢO MẬT & THÔNG BÁO CAO CẤP AKMOD
--- =======================================================
-_G._Authenticated_ = false
-
-_G.AkmodNotify = function(msg)
-  print("[AKMOD] Notify: " .. tostring(msg))
-  pcall(function()
-    -- [1] Thông báo chung 
-    local s4, LocUtil = pcall(require, "common.loc_util")
-    if s4 and LocUtil and LocUtil.ShowNotice then
-      LocUtil.ShowNotice("AKMOD: " .. msg)
-    end
-
-    -- [2] Tip Trận
-    local s3, IngameTipsTools = pcall(require, "GameLua.Mod.BaseMod.Common.UI.InGameTipsTools")
-    if s3 and IngameTipsTools then
-      if IngameTipsTools.BattleNormalTips then
-        IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3)
-      end
-      
-      -- Đã thêm chữ "Thành công" để khi đúng Key nó cũng bung bảng cho VIP
-      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") or string.find(msg, "Thành công") then
-        if IngameTipsTools.ShowMsgBox then
-          IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg)
-        end
-      end
-    end
-
-    -- [3] Thông báo Chat (Trận)
-    local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
-    if s and GameplayData then
-      local uPlayerController = GameplayData.GetPlayerController()
-      if uPlayerController then
-        local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
-        if s2 and STExtraBlueprintFunctionLibrary then
-          local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
-          if chatComp and chatComp.AddMsgInClient then
-            chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>")
-          end
-        end
-      end
-    end
-  end)
-end
-
 local function ExpiredTick()
     if not _G.XthrlenNotifiedPopup then
-        _G.AkmodNotify("Lỗi: MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!")
-        _G.XthrlenNotifiedPopup = true 
         pcall(function()
-            local okTicker, ticker = pcall(require, "common.time_ticker") 
-            if okTicker and ticker and ticker.AddTimerOnce then ticker.AddTimerOnce(2.0, ExpiredTick) end
+            local Msg = require("client.slua.logic.common.logic_common_msg_box")
+            if Msg and Msg.Show then
+                Msg.Show(1, "MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian", 
+                function() 
+                    local Web = require("client.slua.logic.url.logic_webview_sdk")
+                    if Web and Web.OpenURL then Web:OpenURL("https://t.me/ngocdoian") end 
+                end, 
+                function() end, "INBOX CHỦ MOD", "ĐÓNG")
+                _G.XthrlenNotifiedPopup = true 
+            end
         end)
+        
+        if not _G.XthrlenNotifiedPopup then
+            local okTicker, ticker = pcall(require, "common.time_ticker") 
+            if okTicker and ticker and ticker.AddTimerOnce then 
+                ticker.AddTimerOnce(2.0, ExpiredTick) 
+            end
+        end
     end
 end
 
-function _G.FastTick() 
+local function FastTick() 
     if isExpired then 
         if not _G.XthrlenNotifiedExpire then
-            _G.AkmodNotify("Lỗi: MOD ĐÃ HẾT HẠN!")
+            Notify("MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian")
             _G.XthrlenNotifiedExpire = true
             ExpiredTick() 
         end
         return 
     end
 
-    -- 🛑 CHỐT CHẶN: CHƯA AUTHENTICATE THÌ ĐỨNG IM KHÔNG CHO CHẠY
-    if myToken ~= _G.XthrlenState.LoopToken or not _G._Authenticated_ then return end
-
+    if myToken ~= _G.XthrlenState.LoopToken then return end
     pcall(MainLoop) 
     local okTicker, ticker = pcall(require, "common.time_ticker") 
     if okTicker and ticker and ticker.AddTimerOnce then 
-        ticker.AddTimerOnce(0.01, _G.FastTick) 
+        ticker.AddTimerOnce(0.01, FastTick) 
     end 
 end
 
--- ============================================
--- HỆ THỐNG KIỂM TRA KEY ONLINE (API AKMOD.ONLINE)
--- ============================================
-local SERVER_AUTH_URL = "https://akmod.online/api/check_free" 
-local AUTH_HEADER = "####ngocdoianXnanamod96####"
-local XOR_KEY = {0x7B, 0x21, 0xC5, 0xE2, 0x9A, 0x3F, 0x44, 0x10, 0xD8, 0x6C, 0xB2, 0x0E, 0x55, 0xA9, 0x71, 0x3D}
-
-local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-local function decBase64(data)
-    data = string.gsub(data, '[^'..b64chars..'=]', '')
-    return (data:gsub('.', function(x)
-        if (x == '=') then return '' end
-        local r,f='',(b64chars:find(x)-1)
-        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
-        return r;
-    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
-        if (#x ~= 8) then return '' end
-        local c=0; for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end; return string.char(c)
-    end))
+if not isExpired then
+    FastTick() 
+    Notify("Bạn Đang Chơi Mod V2\n ĐÂY LÀ BẢN FREE NẾU BẠN KUA CỦA AI ĐÓ THÌ BẠN ĐÃ BỊ SCAM RỒI.")
+else
+    FastTick() 
 end
 
-local function _t2_bxor(a, b)
-    local r, p = 0, 1
-    for _ = 1, 8 do
-        local a1 = a % 2; local b1 = b % 2
-        if a1 ~= b1 then r = r + p end
-        a = (a - a1) / 2; b = (b - b1) / 2; p = p * 2
-    end
-    return r
-end
-
-local function GetDeviceID()
-    local deviceID = ""
-    pcall(function() local SystemUtil = import("SystemUtil"); if SystemUtil and SystemUtil.GetAndroidID then deviceID = SystemUtil:GetAndroidID() or "" end end)
-    if deviceID == "" then pcall(function() deviceID = os.getenv("ANDROID_ID") or os.getenv("DEVICE_ID") or "" end) end
-    if deviceID == "" then pcall(function() local settings = import("GameUserSettings"); if settings then deviceID = tostring(settings:GetUniqueNetId()) end end) end
-    
-    -- 👉 MÁY XAY RÁC: Hút sạch 100% dấu cách, dấu enter tàng hình làm gãy link
-    local safe_id = string.gsub(tostring(deviceID or "UNKNOWN"), "[%s\r\n]", "")
-    return safe_id
-end
-
-local function GetKeyFromFile()
-    local key = nil
-    local paths = {
-        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.vng.pubgmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
-    }
-    for _, path in ipairs(paths) do
-        local file = io.open(path, "r")
-        if file then 
-            key = file:read("*a"); 
-            file:close(); 
-            if key and key ~= "" then 
-                -- 👉 MÁY DIỆT BOM: Phá hủy 3 ký tự tàng hình của Windows Notepad
-                if string.byte(key, 1) == 239 and string.byte(key, 2) == 187 and string.byte(key, 3) == 191 then
-                    key = string.sub(key, 4)
-                end
-                -- Xóa nốt dấu cách, dấu xuống dòng
-                key = string.gsub(key, "[%s\r\n]", ""); 
-                break 
-            end 
-        end
-    end
-    return key
-end
-
-local function AuthenticateAndStartMod()
-    if _G.AuthTriggered_AK then return end
-    _G.AuthTriggered_AK = true
-
-    local function GetKeyFromFile()
-    local key = nil
-    local paths = {
-        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.vng.pubgmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
-    }
-    for _, path in ipairs(paths) do
-        local file = io.open(path, "r")
-        if file then 
-            key = file:read("*a"); 
-            file:close(); 
-            if key and key ~= "" then 
-                -- Máy diệt rác tàng hình của Windows
-                if string.byte(key, 1) == 239 and string.byte(key, 2) == 187 and string.byte(key, 3) == 191 then
-                    key = string.sub(key, 4)
-                end
-                key = string.gsub(key, "[%s\r\n]", ""); 
-                break 
-            end 
-        end
-    end
-    return key
-end
-
--- 👉 THÊM HÀM MÃ HÓA BASE64 MỚI CỨNG (Để đóng gói gửi lên Server)
-local function encBase64(data)
-    return ((data:gsub('.', function(x) 
-        local r,b='',x:byte()
-        for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
-        return r;
-    end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
-        if (#x < 6) then return '' end
-        local c=0
-        for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
-        return b64chars:sub(c+1,c+1)
-    end)..({ '', '==', '=' })[#data%3+1])
-end
-
-local function AuthenticateAndStartMod()
-    if _G.AuthTriggered_AK then return end
-    _G.AuthTriggered_AK = true
-
-    local key = GetKeyFromFile()
-    if not key or key == "" then
-        _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)!\nVui lòng nhận Key trên web và lưu vào thư mục Paks.")
-        return
-    end
-
-    local hwid = GetDeviceID()
-    local M_Manager = _G.ModuleManager or package.loaded["client.logic.module.ModuleManager"]
-    if not M_Manager then pcall(function() M_Manager = require("client.logic.module.ModuleManager") end) end
-    if not M_Manager then pcall(function() M_Manager = require("GameLua.GameCore.ModuleManager") end) end
-
-    local http = nil
-    if M_Manager and M_Manager.CommonModuleConfig then
-        http = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
-    end
-    
-    if http and http.Post then
-        -- Xay nhuyễn rác tàng hình
-        local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
-        local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
-        
-        -- 👉 ĐÒN CHỐT HẠ: Đóng gói 2 cục này thành chuỗi Base64
-        local payload = safe_key .. ":" .. safe_hwid
-        local payload_b64 = encBase64(payload)
-        
-        -- Ghép vô Mật Khẩu bằng DẤU CHẤM (.) - Bất tử vượt qua mọi chốt chặn Cloudflare!
-        local combined_auth = AUTH_HEADER .. "." .. payload_b64
-        
-        local headers = {
-            ["Content-Type"] = "application/x-www-form-urlencoded",
-            ["x-akmod-auth"] = combined_auth 
-        }
-        
-        local FINAL_URL = SERVER_AUTH_URL
-        local postData = "game_id=LUAPAK"
-        
-        _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
-
-        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
-            if success and type(resp) == "string" and #resp > 10 then
-
-                if string.find(resp, '"status":false') or string.find(resp, "html") then
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (Kiểm tra lại VPS).")
-                    return
-                end
-
-                local decoded = ""
-                pcall(function() decoded = decBase64(resp) end)
-                
-                local decrypted = ""
-                pcall(function()
-                    for i = 1, #decoded do
-                        local byte = string.byte(decoded, i)
-                        local key_byte = XOR_KEY[((i - 1) % 16) + 1]
-                        decrypted = decrypted .. string.char(_t2_bxor(byte, key_byte))
-                    end
-                end)
-
-                if string.find(decrypted, '"status":true') then
-                    _G._Authenticated_ = true
-                    local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
-                    
-                    if not isExpired then
-                        if _G.InitModMenuTab then _G.InitModMenuTab() end
-                        if _G.FastTick then _G.FastTick() end
-                    end
-                    pcall(function() 
-                        if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end 
-                    end)
-                else
-                    local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    local errMsg = msgMatch or ("Lỗi giải mã: " .. string.sub(tostring(resp), 1, 20))
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
-                end
-            else
-                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE")
-            end
-        end, 15)
-    end
+local function InitAllModSystems()
+    pcall(function()
+        if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end
+    end)
 end
 
 pcall(function() 
-    require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
+    require("common.time_ticker").AddTimerOnce(0.5, InitAllModSystems) 
 end)
