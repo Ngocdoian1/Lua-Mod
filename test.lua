@@ -3822,11 +3822,11 @@ local function LoadCloud()
         if Client and Client.LoadFileToString then
             local attempt1 = Client.LoadFileToString("Paks/AKMOD_VIP_KEY.txt")
             if attempt1 and attempt1 ~= "" then
-                return attempt1:gsub("%s+", ""), "Paks/"
+                return string.gsub(attempt1, "[%s\r\n]", ""), "Paks/"
             end
             local attempt2 = Client.LoadFileToString("AKMOD_VIP_KEY.txt")
             if attempt2 and attempt2 ~= "" then
-                return attempt2:gsub("%s+", ""), ""
+                return string.gsub(attempt2, "[%s\r\n]", ""), ""
             end
         end
         return nil, nil
@@ -3844,7 +3844,8 @@ local function LoadCloud()
         return
     end
 
-    local hwid = tostring(myUid)
+    local hwid = string.gsub(tostring(myUid), "[%s\r\n]", "")
+
 
     local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
     local netLabel = (netType == "Wifi" and "WiFi")
