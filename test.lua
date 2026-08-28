@@ -3778,28 +3778,17 @@ _G._Authenticated_ = false
 _G.AkmodNotify = function(msg)
   print("[AKMOD] Notify: " .. tostring(msg))
   pcall(function()
-    -- [1] Thông báo chung 
     local s4, LocUtil = pcall(require, "common.loc_util")
-    if s4 and LocUtil and LocUtil.ShowNotice then
-      LocUtil.ShowNotice("AKMOD: " .. msg)
-    end
+    if s4 and LocUtil and LocUtil.ShowNotice then LocUtil.ShowNotice("AKMOD: " .. msg) end
 
-    -- [2] Tip Trận
     local s3, IngameTipsTools = pcall(require, "GameLua.Mod.BaseMod.Common.UI.InGameTipsTools")
     if s3 and IngameTipsTools then
-      if IngameTipsTools.BattleNormalTips then
-        IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3)
-      end
-      
-      -- Đã thêm chữ "Thành công" để khi đúng Key nó cũng bung bảng cho VIP
-      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") or string.find(msg, "Thành công") then
-        if IngameTipsTools.ShowMsgBox then
-          IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg)
-        end
+      if IngameTipsTools.BattleNormalTips then IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3) end
+      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") then
+        if IngameTipsTools.ShowMsgBox then IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg) end
       end
     end
 
-    -- [3] Thông báo Chat (Trận)
     local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
     if s and GameplayData then
       local uPlayerController = GameplayData.GetPlayerController()
@@ -3807,243 +3796,216 @@ _G.AkmodNotify = function(msg)
         local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
         if s2 and STExtraBlueprintFunctionLibrary then
           local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
-          if chatComp and chatComp.AddMsgInClient then
-            chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>")
-          end
+          if chatComp and chatComp.AddMsgInClient then chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>") end
         end
       end
     end
   end)
 end
 
-local function ExpiredTick()
-    if not _G.XthrlenNotifiedPopup then
-        _G.AkmodNotify("Lỗi: MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!")
-        _G.XthrlenNotifiedPopup = true 
-        pcall(function()
-            local okTicker, ticker = pcall(require, "common.time_ticker") 
-            if okTicker and ticker and ticker.AddTimerOnce then ticker.AddTimerOnce(2.0, ExpiredTick) end
-        end)
-    end
+-- Định nghĩa hàm ForceStart() để mở Menu VIP của AKMOD
+local function ForceStart()
+    if _G.InitModMenuTab then _G.InitModMenuTab() end
+    if _G.FastTick then _G.FastTick() end
+    pcall(function() if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end end)
 end
 
-function _G.FastTick() 
-    if isExpired then 
-        if not _G.XthrlenNotifiedExpire then
-            _G.AkmodNotify("Lỗi: MOD ĐÃ HẾT HẠN!")
-            _G.XthrlenNotifiedExpire = true
-            ExpiredTick() 
+-- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
+local function LoadCloud()
+    if _G._Authenticated_ then return end
+
+    local M_Manager = package.loaded["client.logic.module.ModuleManager"] or _G.ModuleManager or require("client.logic.module.ModuleManager")
+    local http_manager = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
+    if not http_manager then return end
+
+    local function GetUserKey()
+        if Client and Client.LoadFileToString then
+            local attempt1 = Client.LoadFileToString("Paks/AKMOD_VIP_KEY.txt")
+            if attempt1 and attempt1 ~= "" then
+                return attempt1:gsub("%s+", ""), "Paks/"
+            end
+            local attempt2 = Client.LoadFileToString("AKMOD_VIP_KEY.txt")
+            if attempt2 and attempt2 ~= "" then
+                return attempt2:gsub("%s+", ""), ""
+            end
         end
-        return 
+        return nil, nil
     end
 
-    -- 🛑 CHỐT CHẶN: CHƯA AUTHENTICATE THÌ ĐỨNG IM KHÔNG CHO CHẠY
-    if myToken ~= _G.XthrlenState.LoopToken or not _G._Authenticated_ then return end
-
-    pcall(MainLoop) 
-    local okTicker, ticker = pcall(require, "common.time_ticker") 
-    if okTicker and ticker and ticker.AddTimerOnce then 
-        ticker.AddTimerOnce(0.01, _G.FastTick) 
-    end 
-end
-
--- ============================================
--- HỆ THỐNG KIỂM TRA KEY ONLINE (API AKMOD.ONLINE)
--- ============================================
-local SERVER_AUTH_URL = "https://akmod.online/api/check_free" 
-local AUTH_HEADER = "####ngocdoianXnanamod96####"
-local XOR_KEY = {0x7B, 0x21, 0xC5, 0xE2, 0x9A, 0x3F, 0x44, 0x10, 0xD8, 0x6C, 0xB2, 0x0E, 0x55, 0xA9, 0x71, 0x3D}
-
-local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-local function decBase64(data)
-    data = string.gsub(data, '[^'..b64chars..'=]', '')
-    return (data:gsub('.', function(x)
-        if (x == '=') then return '' end
-        local r,f='',(b64chars:find(x)-1)
-        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
-        return r;
-    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
-        if (#x ~= 8) then return '' end
-        local c=0; for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end; return string.char(c)
-    end))
-end
-
-local function _t2_bxor(a, b)
-    local r, p = 0, 1
-    for _ = 1, 8 do
-        local a1 = a % 2; local b1 = b % 2
-        if a1 ~= b1 then r = r + p end
-        a = (a - a1) / 2; b = (b - b1) / 2; p = p * 2
-    end
-    return r
-end
-
-local function GetDeviceID()
-    local deviceID = ""
-    pcall(function() local SystemUtil = import("SystemUtil"); if SystemUtil and SystemUtil.GetAndroidID then deviceID = SystemUtil:GetAndroidID() or "" end end)
-    if deviceID == "" then pcall(function() deviceID = os.getenv("ANDROID_ID") or os.getenv("DEVICE_ID") or "" end) end
-    if deviceID == "" then pcall(function() local settings = import("GameUserSettings"); if settings then deviceID = tostring(settings:GetUniqueNetId()) end end) end
-    
-    -- 👉 MÁY XAY RÁC: Hút sạch 100% dấu cách, dấu enter tàng hình làm gãy link
-    local safe_id = string.gsub(tostring(deviceID or "UNKNOWN"), "[%s\r\n]", "")
-    return safe_id
-end
-
-local function GetKeyFromFile()
-    local key = nil
-    local paths = {
-        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.vng.pubgmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
-    }
-    for _, path in ipairs(paths) do
-        local file = io.open(path, "r")
-        if file then 
-            key = file:read("*a"); 
-            file:close(); 
-            if key and key ~= "" then 
-                -- 👉 MÁY DIỆT BOM: Phá hủy 3 ký tự tàng hình của Windows Notepad
-                if string.byte(key, 1) == 239 and string.byte(key, 2) == 187 and string.byte(key, 3) == 191 then
-                    key = string.sub(key, 4)
-                end
-                -- Xóa nốt dấu cách, dấu xuống dòng
-                key = string.gsub(key, "[%s\r\n]", ""); 
-                break 
-            end 
-        end
-    end
-    return key
-end
-
-local function AuthenticateAndStartMod()
-    if _G.AuthTriggered_AK then return end
-    _G.AuthTriggered_AK = true
-
-    local function GetKeyFromFile()
-    local key = nil
-    local paths = {
-        "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.pubg.krmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt",
-        "/storage/emulated/0/Android/data/com.vng.pubgmobile/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/AKMOD_KEY_VIP.txt"
-    }
-    for _, path in ipairs(paths) do
-        local file = io.open(path, "r")
-        if file then 
-            key = file:read("*a"); 
-            file:close(); 
-            if key and key ~= "" then 
-                -- Máy diệt rác tàng hình của Windows
-                if string.byte(key, 1) == 239 and string.byte(key, 2) == 187 and string.byte(key, 3) == 191 then
-                    key = string.sub(key, 4)
-                end
-                key = string.gsub(key, "[%s\r\n]", ""); 
-                break 
-            end 
-        end
-    end
-    return key
-end
-
--- 👉 THÊM HÀM MÃ HÓA BASE64 MỚI CỨNG (Để đóng gói gửi lên Server)
-local function encBase64(data)
-    return ((data:gsub('.', function(x) 
-        local r,b='',x:byte()
-        for i=8,1,-1 do r=r..(b%2^i-b%2^(i-1)>0 and '1' or '0') end
-        return r;
-    end)..'0000'):gsub('%d%d%d?%d?%d?%d?', function(x)
-        if (#x < 6) then return '' end
-        local c=0
-        for i=1,6 do c=c+(x:sub(i,i)=='1' and 2^(6-i) or 0) end
-        return b64chars:sub(c+1,c+1)
-    end)..({ '', '==', '=' })[#data%3+1])
-end
-
-local function AuthenticateAndStartMod()
-    if _G.AuthTriggered_AK then return end
-    _G.AuthTriggered_AK = true
-
-    local key = GetKeyFromFile()
-    if not key or key == "" then
-        _G.AkmodNotify("Lỗi: Không tìm thấy file Key (AKMOD_KEY_VIP.txt)!\nVui lòng nhận Key trên web và lưu vào thư mục Paks.")
+    local userKey, keyPath = GetUserKey()
+    if not userKey or userKey == "" then
+        _G.AkmodNotify("Loi: Khong tim thay file AKMOD_VIP_KEY.txt!")
         return
     end
 
-    local hwid = GetDeviceID()
-    local M_Manager = _G.ModuleManager or package.loaded["client.logic.module.ModuleManager"]
-    if not M_Manager then pcall(function() M_Manager = require("client.logic.module.ModuleManager") end) end
-    if not M_Manager then pcall(function() M_Manager = require("GameLua.GameCore.ModuleManager") end) end
-
-    local http = nil
-    if M_Manager and M_Manager.CommonModuleConfig then
-        http = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
+    local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
+    if not myUid or myUid == "" then
+        _G.AkmodNotify("Loi: UID khong hop le hoac game chua load xong!")
+        return
     end
-    
-    if http and http.Post then
-        -- Xay nhuyễn rác tàng hình
-        local safe_key = string.gsub(tostring(key), "[%s\r\n]", "")
-        local safe_hwid = string.gsub(tostring(hwid), "[%s\r\n]", "")
-        
-        -- 👉 ĐÒN CHỐT HẠ: Đóng gói 2 cục này thành chuỗi Base64
-        local payload = safe_key .. ":" .. safe_hwid
-        local payload_b64 = encBase64(payload)
-        
-        -- Ghép vô Mật Khẩu bằng DẤU CHẤM (.) - Bất tử vượt qua mọi chốt chặn Cloudflare!
-        local combined_auth = AUTH_HEADER .. "." .. payload_b64
-        
-        local headers = {
-            ["Content-Type"] = "application/x-www-form-urlencoded",
-            ["x-akmod-auth"] = combined_auth 
-        }
-        
-        local FINAL_URL = SERVER_AUTH_URL
-        local postData = "game_id=LUAPAK"
-        
-        _G.AkmodNotify("Đang xác thực Key qua Server AKMOD...")
 
-        http:Post(FINAL_URL, headers, postData, nil, function(success, resp)
-            if success and type(resp) == "string" and #resp > 10 then
+    local hwid = tostring(myUid)
 
-                if string.find(resp, '"status":false') or string.find(resp, "html") then
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi API Máy chủ (Kiểm tra lại VPS).")
+    local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
+    local netLabel = (netType == "Wifi" and "WiFi")
+                  or (netType == "4G"   and "4G")
+                  or (netType == "3G"   and "3G/Yeu")
+                  or (netType == "2G"   and "2G/Rat yeu")
+                  or netType
+
+    -- Đổi API URL về Server AKMOD của ní
+    local apiUrl  = "https://akmod.online/api/check_free"
+    local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
+    local maxRetries = 3
+
+    local function EngineUnpack(str)
+        if not str or str == "" then return nil end
+        local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        local s = str:gsub('[\r\n%s]', '')
+        s = s:gsub('%-', '+'):gsub('_', '/')
+        local pad = #s % 4
+        if pad > 0 then s = s .. string.rep('=', 4 - pad) end
+
+        local b = {}
+        local len = #s
+        for i = 1, len, 4 do
+            local c1 = b64chars:find(s:sub(i,   i),   1, true)
+            local c2 = b64chars:find(s:sub(i+1, i+1), 1, true)
+            local c3 = b64chars:find(s:sub(i+2, i+2), 1, true)
+            local c4 = b64chars:find(s:sub(i+3, i+3), 1, true)
+            if not c1 or not c2 then break end
+            c1, c2 = c1 - 1, c2 - 1
+            c3 = c3 and (c3 - 1) or 0
+            c4 = c4 and (c4 - 1) or 0
+            local n = (c1 * 262144) + (c2 * 4096) + (c3 * 64) + c4
+            b[#b+1] = string.char(math.floor(n / 65536) % 256)
+            if s:sub(i+2, i+2) ~= '=' then b[#b+1] = string.char(math.floor(n / 256) % 256) end
+            if s:sub(i+3, i+3) ~= '=' then b[#b+1] = string.char(n % 256) end
+        end
+        local raw = table.concat(b)
+
+        local K = {0x7B, 0x21, 0xC5, 0xE2, 0x9A, 0x3F, 0x44, 0x10, 0xD8, 0x6C, 0xB2, 0x0E, 0x55, 0xA9, 0x71, 0x3D}
+        local out = {}
+        local bxor_fn = (bit and bit.bxor) or (bit32 and bit32.bxor) or function(a, x)
+            local r, m = 0, 128
+            while m >= 1 do
+                local va = (a >= m) and 1 or 0
+                local vb = (x >= m) and 1 or 0
+                if va ~= vb then r = r + m end
+                if a >= m then a = a - m end
+                if x >= m then x = x - m end
+                m = m / 2
+            end
+            return r
+        end
+        for i = 1, #raw do
+            local k = K[((i - 1) % 16) + 1]
+            out[#out+1] = string.char(bxor_fn(string.byte(raw, i), k))
+        end
+        return table.concat(out)
+    end
+
+    local function DoRequest(retryLeft)
+        if retryLeft == maxRetries then
+            _G.AkmodNotify("Dang xac thuc key qua server... [" .. netLabel .. "]")
+        end
+        local postData = string.format("game=PUBG&user_key=%s&serial=%s", userKey, hwid)
+        local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
+        local _sw = _sw_r:reverse()
+
+        local function SimpleHMAC(msg, key)
+            local keyBytes = {}
+            for i = 1, #key do keyBytes[i] = string.byte(key, i) end
+            local kLen = #keyBytes
+            local h = 5381
+            for i = 1, #msg do
+                local kb = keyBytes[((i-1) % kLen) + 1]
+                h = ((h * 31) + string.byte(msg, i) + kb) % 4294967296
+            end
+            local h2 = 0x12345678
+            for i = #msg, 1, -1 do
+                local kb = keyBytes[((#msg - i) % kLen) + 1]
+                h2 = ((h2 * 37) + string.byte(msg, i) + kb) % 4294967296
+            end
+            return string.format("%08x%08x", h, h2)
+        end
+
+        http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
+            if not success then
+                if retryLeft > 0 then
+                    local delay   = 2 ^ (maxRetries - retryLeft + 1)
+                    local errCode = tostring(result or "NIL")
+                    _G.AkmodNotify("Ket noi gap su co [" .. netLabel .. "] (Ma: " .. errCode .. "). Thu lai sau " .. delay .. "s... (" .. retryLeft .. " lan con)")
+                    local ok_t, time_ticker = pcall(require, "common.time_ticker")
+                    if ok_t and time_ticker and time_ticker.AddTimerOnce then
+                        time_ticker.AddTimerOnce(delay, function() DoRequest(retryLeft - 1) end)
+                    else
+                        DoRequest(retryLeft - 1)
+                    end
+                else
+                    _G.AkmodNotify("Ket noi that bai [" .. netLabel .. "]. Ma loi: " .. tostring(result or "NIL"))
+                end
+                return
+            end
+
+            if not data or data == "" then
+                _G.AkmodNotify("Tu choi: Khong co du lieu tra ve tu server")
+                return
+            end
+
+            local rawData = data
+            if not data:find('{"status"', 1, true) then
+                local unpacked = EngineUnpack(data)
+                if unpacked and unpacked:find('{"status"', 1, true) then
+                    rawData = unpacked
+                end
+            end
+
+            local sData = tostring(rawData)
+
+            local statusVal = sData:match('"status"%s*:%s*(true)')
+                           or sData:match('"status"%s*:%s*(1[^%d])')
+            local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
+
+            if statusVal then
+                local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
+                local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
+                local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
+
+                local sigOk = false
+                if sigVal and tokenVal and rngVal then
+                    local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
+                    if sigVal:sub(1, 16) == expectedSig:sub(1, 16) then
+                        sigOk = true
+                    end
+                end
+
+                if not sigOk then
+                    _G.AkmodNotify("Canh bao: Phat hien phan hoi bi gia mao hoac bi chinh sua! (sig invalid)")
+                    _G._Authenticated_ = false
                     return
                 end
 
-                local decoded = ""
-                pcall(function() decoded = decBase64(resp) end)
-                
-                local decrypted = ""
-                pcall(function()
-                    for i = 1, #decoded do
-                        local byte = string.byte(decoded, i)
-                        local key_byte = XOR_KEY[((i - 1) % 16) + 1]
-                        decrypted = decrypted .. string.char(_t2_bxor(byte, key_byte))
-                    end
-                end)
-
-                if string.find(decrypted, '"status":true') then
-                    _G._Authenticated_ = true
-                    local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    _G.AkmodNotify("Thành công: " .. (msgMatch or "Xác thực Key thành công! Chào mừng VIP."))
-                    
-                    if not isExpired then
-                        if _G.InitModMenuTab then _G.InitModMenuTab() end
-                        if _G.FastTick then _G.FastTick() end
-                    end
-                    pcall(function() 
-                        if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end 
-                    end)
-                else
-                    local msgMatch = string.match(decrypted, '"msg":"(.-)"')
-                    local errMsg = msgMatch or ("Lỗi giải mã: " .. string.sub(tostring(resp), 1, 20))
-                    _G.AkmodNotify("Từ chối truy cập: Lỗi " .. errMsg)
-                end
+                _G._Authenticated_ = true                
+                ForceStart()
+                -- Thay vì xài expDate bị lỗi, mình lấy luôn thông báo từ Server đưa ra
+                local notice = reasonVal or "Xac thuc key thanh cong! Chao mung ban."
+                _G.AkmodNotify(notice)
             else
-                _G.AkmodNotify("Lỗi mạng: Không thể kết nối đến máy chủ AKMOD.ONLINE")
+                local errMsg = reasonVal or "Key/Thiet bi khong hop le hoac da het han!"
+                _G.AkmodNotify("Xac thuc key that bai: " .. errMsg)
             end
-        end, 15)
+        end, 30)
     end
+
+
+    DoRequest(maxRetries)
 end
 
+-- Kích nổ tự động
 pcall(function() 
-    require("common.time_ticker").AddTimerOnce(3.0, AuthenticateAndStartMod) 
+    local ok_t, time_ticker = pcall(require, "common.time_ticker")
+    if ok_t and time_ticker and time_ticker.AddTimerOnce then
+        time_ticker.AddTimerOnce(3.0, LoadCloud) 
+    end
 end)
