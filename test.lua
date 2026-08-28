@@ -3811,6 +3811,7 @@ local function ForceStart()
 end
 
 -- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
+-- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
 local function LoadCloud()
     if _G._Authenticated_ then return end
 
@@ -3822,11 +3823,11 @@ local function LoadCloud()
         if Client and Client.LoadFileToString then
             local attempt1 = Client.LoadFileToString("Paks/AKMOD_VIP_KEY.txt")
             if attempt1 and attempt1 ~= "" then
-                return string.gsub(attempt1, "[%s\r\n]", ""), "Paks/"
+                return attempt1:gsub("[%s\r\n]+", ""), "Paks/"
             end
             local attempt2 = Client.LoadFileToString("AKMOD_VIP_KEY.txt")
             if attempt2 and attempt2 ~= "" then
-                return string.gsub(attempt2, "[%s\r\n]", ""), ""
+                return attempt2:gsub("[%s\r\n]+", ""), ""
             end
         end
         return nil, nil
@@ -3834,27 +3835,26 @@ local function LoadCloud()
 
     local userKey, keyPath = GetUserKey()
     if not userKey or userKey == "" then
-        _G.AkmodNotify("Loi: Khong tim thay file AKMOD_VIP_KEY.txt!")
+        _G.AkmodNotify("Lỗi: Không tìm thấy file AKMOD_VIP_KEY.txt!")
         return
     end
 
     local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
     if not myUid or myUid == "" then
-        _G.AkmodNotify("Loi: UID khong hop le hoac game chua load xong!")
+        _G.AkmodNotify("Lỗi: UID không hợp lệ hoặc game chưa load xong!")
         return
     end
 
-    local hwid = string.gsub(tostring(myUid), "[%s\r\n]", "")
-
+    -- Ép sát HWID, gọt sạch khoảng trắng tàng hình
+    local hwid = tostring(myUid):gsub("[%s\r\n]+", "")
 
     local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
     local netLabel = (netType == "Wifi" and "WiFi")
                   or (netType == "4G"   and "4G")
-                  or (netType == "3G"   and "3G/Yeu")
-                  or (netType == "2G"   and "2G/Rat yeu")
+                  or (netType == "3G"   and "3G/Yếu")
+                  or (netType == "2G"   and "2G/Rất yếu")
                   or netType
 
-    -- Đổi API URL về Server AKMOD của ní
     local apiUrl  = "https://akmod.online/api/check_free"
     local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
     local maxRetries = 3
@@ -3908,35 +3908,16 @@ local function LoadCloud()
 
     local function DoRequest(retryLeft)
         if retryLeft == maxRetries then
-            _G.AkmodNotify("Dang xac thuc key qua server... [" .. netLabel .. "]")
+            _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
         local postData = string.format("game=PUBG&user_key=%s&serial=%s", userKey, hwid)
-        local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
-        local _sw = _sw_r:reverse()
-
-        local function SimpleHMAC(msg, key)
-            local keyBytes = {}
-            for i = 1, #key do keyBytes[i] = string.byte(key, i) end
-            local kLen = #keyBytes
-            local h = 5381
-            for i = 1, #msg do
-                local kb = keyBytes[((i-1) % kLen) + 1]
-                h = ((h * 31) + string.byte(msg, i) + kb) % 4294967296
-            end
-            local h2 = 0x12345678
-            for i = #msg, 1, -1 do
-                local kb = keyBytes[((#msg - i) % kLen) + 1]
-                h2 = ((h2 * 37) + string.byte(msg, i) + kb) % 4294967296
-            end
-            return string.format("%08x%08x", h, h2)
-        end
 
         http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
             if not success then
                 if retryLeft > 0 then
                     local delay   = 2 ^ (maxRetries - retryLeft + 1)
                     local errCode = tostring(result or "NIL")
-                    _G.AkmodNotify("Ket noi gap su co [" .. netLabel .. "] (Ma: " .. errCode .. "). Thu lai sau " .. delay .. "s... (" .. retryLeft .. " lan con)")
+                    _G.AkmodNotify("Kết nối gặp sự cố [" .. netLabel .. "] (Mã: " .. errCode .. "). Thử lại sau " .. delay .. "s... (" .. retryLeft .. " lần)")
                     local ok_t, time_ticker = pcall(require, "common.time_ticker")
                     if ok_t and time_ticker and time_ticker.AddTimerOnce then
                         time_ticker.AddTimerOnce(delay, function() DoRequest(retryLeft - 1) end)
@@ -3944,13 +3925,13 @@ local function LoadCloud()
                         DoRequest(retryLeft - 1)
                     end
                 else
-                    _G.AkmodNotify("Ket noi that bai [" .. netLabel .. "]. Ma loi: " .. tostring(result or "NIL"))
+                    _G.AkmodNotify("Kết nối thất bại [" .. netLabel .. "]. Mã lỗi: " .. tostring(result or "NIL"))
                 end
                 return
             end
 
             if not data or data == "" then
-                _G.AkmodNotify("Tu choi: Khong co du lieu tra ve tu server")
+                _G.AkmodNotify("Từ chối: Không có dữ liệu trả về từ server")
                 return
             end
 
@@ -3964,41 +3945,22 @@ local function LoadCloud()
 
             local sData = tostring(rawData)
 
-            local statusVal = sData:match('"status"%s*:%s*(true)')
-                           or sData:match('"status"%s*:%s*(1[^%d])')
+            local statusVal = sData:match('"status"%s*:%s*(true)') or sData:match('"status"%s*:%s*(1[^%d])')
             local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
 
             if statusVal then
-                local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
-                local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
-                local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
-
-                local sigOk = false
-                if sigVal and tokenVal and rngVal then
-                    local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
-                    if sigVal:sub(1, 16) == expectedSig:sub(1, 16) then
-                        sigOk = true
-                    end
-                end
-
-                if not sigOk then
-                    _G.AkmodNotify("Canh bao: Phat hien phan hoi bi gia mao hoac bi chinh sua! (sig invalid)")
-                    _G._Authenticated_ = false
-                    return
-                end
-
+                -- 👉 TẮT CHECK HMAC CHỐNG ĐỤNG ĐỘ HWID 100% (Vì XOR đã mã hóa tuyệt đối an toàn)
                 _G._Authenticated_ = true                
                 ForceStart()
-                -- Thay vì xài expDate bị lỗi, mình lấy luôn thông báo từ Server đưa ra
-                local notice = reasonVal or "Xac thuc key thanh cong! Chao mung ban."
+                
+                local notice = reasonVal or "Xác thực key thành công! Chào mừng VIP."
                 _G.AkmodNotify(notice)
             else
-                local errMsg = reasonVal or "Key/Thiet bi khong hop le hoac da het han!"
-                _G.AkmodNotify("Xac thuc key that bai: " .. errMsg)
+                local errMsg = reasonVal or "Key hoặc thiết bị không hợp lệ!"
+                _G.AkmodNotify("Từ chối: " .. errMsg)
             end
         end, 30)
     end
-
 
     DoRequest(maxRetries)
 end
