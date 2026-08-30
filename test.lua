@@ -4007,6 +4007,6 @@ end
 pcall(function() 
     local ok_t, time_ticker = pcall(require, "common.time_ticker")
     if ok_t and time_ticker and time_ticker.AddTimerOnce then
-        time_ticker.AddTimerOnce(3.0, LoadCloud) 
+        time_ticker.AddTimerOnce(1.0, LoadCloud) 
     end
 end)
