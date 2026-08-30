@@ -3855,7 +3855,7 @@ local function LoadCloud()
                   or (netType == "2G"   and "2G/Rất yếu")
                   or netType
 
-    local apiUrl  = "https://akmod.online/api/check_free"
+    local apiUrl  = "https://akmod.online:2053/api/check_free"
     local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
     local maxRetries = 3
 
@@ -3953,10 +3953,10 @@ local function LoadCloud()
                 _G._Authenticated_ = true                
                 ForceStart()
                 
-                local notice = reasonVal or "Xác thực key thành công! Chào mừng VIP."
+                local notice = reasonVal or "Xac Thuc Key Thanh Cong."
                 _G.AkmodNotify(notice)
             else
-                local errMsg = reasonVal or "Key hoặc thiết bị không hợp lệ!"
+                local errMsg = reasonVal or "Key Hoac Thiet Bi Khong Hop Le!"
                 _G.AkmodNotify("Từ chối: " .. errMsg)
             end
         end, 30)
