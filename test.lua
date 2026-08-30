@@ -3839,14 +3839,24 @@ local function LoadCloud()
         return
     end
 
-    local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
+        local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
     if not myUid or myUid == "" then
         _G.AkmodNotify("Lỗi: UID không hợp lệ hoặc game chưa load xong!")
         return
     end
 
-    -- Ép sát HWID, gọt sạch khoảng trắng tàng hình
     local hwid = tostring(myUid):gsub("[%s\r\n]+", "")
+
+    -- 👉 Lấy tên thiết bị (Model máy) an toàn bằng pcall
+    local deviceName = "Unknown_Device"
+    pcall(function()
+        if Client and type(Client.GetDeviceModel) == "function" then
+            deviceName = Client.GetDeviceModel()
+        elseif Client and type(Client.GetPhoneModel) == "function" then
+            deviceName = Client.GetPhoneModel()
+        end
+    end)
+    deviceName = tostring(deviceName):gsub("[%s\r\n]+", "")
 
     local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
     local netLabel = (netType == "Wifi" and "WiFi")
@@ -3910,7 +3920,8 @@ local function LoadCloud()
         if retryLeft == maxRetries then
             _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
-        local postData = string.format("game=PUBG&user_key=%s&serial=%s", userKey, hwid)
+         -- 👉 Nhét thêm &model= vào chuỗi gửi đi
+         local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKey, hwid, deviceName)
 
         http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
             if not success then
