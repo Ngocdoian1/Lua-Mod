@@ -3847,16 +3847,43 @@ local function LoadCloud()
 
     local hwid = tostring(myUid):gsub("[%s\r\n]+", "")
 
-    -- 👉 Lấy tên thiết bị (Model máy) an toàn bằng pcall
-    local deviceName = "Unknown_Device"
+        -- 👉 Máy quét siêu âm: Bốc Hãng + Mã Máy + Tên tự đặt
+    local deviceName = "Unknown"
     pcall(function()
-        if Client and type(Client.GetDeviceModel) == "function" then
-            deviceName = Client.GetDeviceModel()
-        elseif Client and type(Client.GetPhoneModel) == "function" then
-            deviceName = Client.GetPhoneModel()
+        local brand = ""
+        local model = ""
+        local customName = ""
+        
+        if Client then
+            -- 1. Bốc Hãng
+            if type(Client.GetDeviceBrand) == "function" then brand = Client.GetDeviceBrand() or "" end
+            if brand == "" and type(Client.GetPhoneBrand) == "function" then brand = Client.GetPhoneBrand() or "" end
+            
+            -- 2. Bốc Mã máy
+            if type(Client.GetDeviceModel) == "function" then model = Client.GetDeviceModel() or "" end
+            if model == "" and type(Client.GetPhoneModel) == "function" then model = Client.GetPhoneModel() or "" end
+            
+            -- 3. Bốc Tên tự đặt
+            if type(Client.GetDeviceName) == "function" then customName = Client.GetDeviceName() or "" end
+        end
+
+        -- Dọn rác tàng hình và emoji (CỰC KỲ QUAN TRỌNG ĐỂ KHÔNG LỖI POST)
+        brand = tostring(brand):gsub("[%s\r\n]+", ""):gsub("[^%w]", "")
+        model = tostring(model):gsub("[%s\r\n]+", ""):gsub("[^%w%-]", "")
+        customName = tostring(customName):gsub("[%s\r\n]+", "_"):gsub("[^%w%_]", "")
+
+        local parts = {}
+        if brand ~= "" then table.insert(parts, brand) end
+        if model ~= "" then table.insert(parts, model) end
+        if customName ~= "" and customName ~= "Unknown" then table.insert(parts, customName) end
+
+        if #parts > 0 then
+            -- Ghép lại bằng 3 dấu gạch dưới (Ví dụ: Xiaomi___2201117TG___Dien_thoai_cua_Nhi)
+            deviceName = table.concat(parts, "___")
         end
     end)
-    deviceName = tostring(deviceName):gsub("[%s\r\n]+", "")
+    
+    local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKey, hwid, deviceName)
 
     local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
     local netLabel = (netType == "Wifi" and "WiFi")
