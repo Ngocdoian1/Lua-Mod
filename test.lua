@@ -3946,8 +3946,14 @@ local function LoadCloud()
         end
         
         -- Gọi URL gởi sạch sẽ
+                -- Gọi URL gởi sạch sẽ
         local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
-        local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
+        
+        -- 👉 ĐẶT THẲNG CHUỖI KHÓA (BỎ HÀM REVERSE ĐỂ TRÁNH LỖI)
+        local _sw = "Vm8kLk7Uj2JmJsCPVPVjrLa7zgfx3uz9E"
+
+        -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 16-BIT (CHỐNG TRÀN SỐ 100%)
+
         local _sw = _sw_r:reverse()
 
         -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 16-BIT (CHỐNG TRÀN SỐ 100%)
