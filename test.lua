@@ -3940,7 +3940,7 @@ local function LoadCloud()
         return table.concat(out)
     end
 
-    local function DoRequest(retryLeft)
+        local function DoRequest(retryLeft)
         if retryLeft == maxRetries then
             _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
@@ -3950,21 +3950,22 @@ local function LoadCloud()
         local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
         local _sw = _sw_r:reverse()
 
+        -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 16-BIT (CHỐNG TRÀN SỐ 100%)
         local function SimpleHMAC(msg, key)
             local keyBytes = {}
             for i = 1, #key do keyBytes[i] = string.byte(key, i) end
             local kLen = #keyBytes
-            local h = 5381
+            local sum1 = 0
+            local sum2 = 0
             for i = 1, #msg do
-                local kb = keyBytes[((i-1) % kLen) + 1]
-                h = ((h * 31) + string.byte(msg, i) + kb) % 4294967296
+                local kb1 = keyBytes[((i-1) % kLen) + 1]
+                sum1 = (sum1 + string.byte(msg, i) * i + kb1) % 65535
+                
+                local rev_idx = #msg - i
+                local kb2 = keyBytes[(rev_idx % kLen) + 1]
+                sum2 = (sum2 + string.byte(msg, i) * kb2 + (i - 1)) % 65535
             end
-            local h2 = 0x12345678
-            for i = #msg, 1, -1 do
-                local kb = keyBytes[((#msg - i) % kLen) + 1]
-                h2 = ((h2 * 37) + string.byte(msg, i) + kb) % 4294967296
-            end
-            return string.format("%08x%08x", h, h2)
+            return string.format("%04x%04x", sum1, sum2)
         end
 
         http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
@@ -4004,22 +4005,21 @@ local function LoadCloud()
             local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
 
             if statusVal then
-                -- 🚀 BẬT LẠI LỚP BẢO MẬT HMAC 
                 local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
                 local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
                 local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
 
                 local sigOk = false
                 if sigVal and tokenVal and rngVal then
-                    -- So sánh chữ ký, dùng hwid chuẩn không ký tự lạ
                     local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
-                    if sigVal:sub(1, 16) == expectedSig:sub(1, 16) then
+                    -- So sánh chuẩn tuyệt đối 8 ký tự
+                    if sigVal == expectedSig then
                         sigOk = true
                     end
                 end
 
                 if not sigOk then
-                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (sig invalid)")
+                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (Sai chữ ký HMAC 16-bit)")
                     _G._Authenticated_ = false
                     return
                 end
