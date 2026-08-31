@@ -3812,6 +3812,7 @@ end
 
 -- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
 -- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
+-- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
 local function LoadCloud()
     if _G._Authenticated_ then return end
 
@@ -3839,15 +3840,18 @@ local function LoadCloud()
         return
     end
 
-        local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
+    local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
     if not myUid or myUid == "" then
         _G.AkmodNotify("Lỗi: UID không hợp lệ hoặc game chưa load xong!")
         return
     end
 
-    local hwid = tostring(myUid):gsub("[%s\r\n]+", "")
+    -- 🚀 FIX CỨNG HMAC TẠI ĐÂY: Loại bỏ 100% các ký tự lạ, dấu cộng, dấu bằng...
+    -- Chỉ giữ lại duy nhất Chữ cái và Số để đảm bảo Server và Lua tính chữ ký giống hệt nhau
+    local hwid = tostring(myUid):gsub("[^%w]", "")
+    local userKeySafe = tostring(userKey):gsub("[^%w%-]", "")
 
-        -- 👉 Máy quét siêu âm: Bốc Hãng + Mã Máy + Tên tự đặt
+    -- 👉 Máy quét siêu âm: Bốc Hãng + Mã Máy + Tên tự đặt
     local deviceName = "Unknown"
     pcall(function()
         local brand = ""
@@ -3855,19 +3859,15 @@ local function LoadCloud()
         local customName = ""
         
         if Client then
-            -- 1. Bốc Hãng
             if type(Client.GetDeviceBrand) == "function" then brand = Client.GetDeviceBrand() or "" end
             if brand == "" and type(Client.GetPhoneBrand) == "function" then brand = Client.GetPhoneBrand() or "" end
             
-            -- 2. Bốc Mã máy
             if type(Client.GetDeviceModel) == "function" then model = Client.GetDeviceModel() or "" end
             if model == "" and type(Client.GetPhoneModel) == "function" then model = Client.GetPhoneModel() or "" end
             
-            -- 3. Bốc Tên tự đặt
             if type(Client.GetDeviceName) == "function" then customName = Client.GetDeviceName() or "" end
         end
 
-        -- Dọn rác tàng hình và emoji (CỰC KỲ QUAN TRỌNG ĐỂ KHÔNG LỖI POST)
         brand = tostring(brand):gsub("[%s\r\n]+", ""):gsub("[^%w]", "")
         model = tostring(model):gsub("[%s\r\n]+", ""):gsub("[^%w%-]", "")
         customName = tostring(customName):gsub("[%s\r\n]+", "_"):gsub("[^%w%_]", "")
@@ -3878,12 +3878,9 @@ local function LoadCloud()
         if customName ~= "" and customName ~= "Unknown" then table.insert(parts, customName) end
 
         if #parts > 0 then
-            -- Ghép lại bằng 3 dấu gạch dưới (Ví dụ: Xiaomi___2201117TG___Dien_thoai_cua_Nhi)
             deviceName = table.concat(parts, "___")
         end
     end)
-    
-    local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKey, hwid, deviceName)
 
     local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
     local netLabel = (netType == "Wifi" and "WiFi")
@@ -3943,17 +3940,16 @@ local function LoadCloud()
         return table.concat(out)
     end
 
-        local function DoRequest(retryLeft)
+    local function DoRequest(retryLeft)
         if retryLeft == maxRetries then
             _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
         
-        -- Gửi đầy đủ Key, HWID và Tên máy lên Server
-        local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKey, hwid, deviceName)
+        -- Gọi URL gởi sạch sẽ
+        local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
         local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
         local _sw = _sw_r:reverse()
 
-        -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT (HMAC)
         local function SimpleHMAC(msg, key)
             local keyBytes = {}
             for i = 1, #key do keyBytes[i] = string.byte(key, i) end
@@ -4008,13 +4004,14 @@ local function LoadCloud()
             local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
 
             if statusVal then
-                -- 🚀 BẬT LẠI LỚP BẢO MẬT HMAC ĐỂ ĐỐI CHIẾU SERVER
+                -- 🚀 BẬT LẠI LỚP BẢO MẬT HMAC 
                 local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
                 local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
                 local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
 
                 local sigOk = false
                 if sigVal and tokenVal and rngVal then
+                    -- So sánh chữ ký, dùng hwid chuẩn không ký tự lạ
                     local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
                     if sigVal:sub(1, 16) == expectedSig:sub(1, 16) then
                         sigOk = true
@@ -4022,7 +4019,7 @@ local function LoadCloud()
                 end
 
                 if not sigOk then
-                    _G.AkmodNotify("Cảnh báo: Phát hiện phản hồi bị giả mạo! (Sai chữ ký server)")
+                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (sig invalid)")
                     _G._Authenticated_ = false
                     return
                 end
@@ -4030,10 +4027,10 @@ local function LoadCloud()
                 _G._Authenticated_ = true                
                 ForceStart()
                 
-                local notice = reasonVal or "Xac Thuc Key Thanh Cong."
+                local notice = reasonVal or "Xác thực Key thành công!"
                 _G.AkmodNotify(notice)
             else
-                local errMsg = reasonVal or "Key Hoac Thiet Bi Khong Hop Le!"
+                local errMsg = reasonVal or "Key hoặc thiết bị không hợp lệ!"
                 _G.AkmodNotify("Từ chối: " .. errMsg)
             end
         end, 30)
