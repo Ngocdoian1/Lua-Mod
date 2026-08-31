@@ -3940,21 +3940,16 @@ local function LoadCloud()
         return table.concat(out)
     end
 
-            local function DoRequest(retryLeft)
+                local function DoRequest(retryLeft)
         if retryLeft == maxRetries then
             _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
         
         -- Gọi URL gởi sạch sẽ
-                -- Gọi URL gởi sạch sẽ
         local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
         
-        -- 👉 ĐẶT THẲNG CHUỖI KHÓA (BỎ HÀM REVERSE ĐỂ TRÁNH LỖI)
+        -- 👉 ĐẶT THẲNG CHUỖI KHÓA SẠCH SẼ NHẤT
         local _sw = "Vm8kLk7Uj2JmJsCPVPVjrLa7zgfx3uz9E"
-
-        -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 16-BIT (CHỐNG TRÀN SỐ 100%)
-
-        local _sw = _sw_r:reverse()
 
         -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 16-BIT (CHỐNG TRÀN SỐ 100%)
         local function SimpleHMAC(msg, key)
@@ -4017,7 +4012,6 @@ local function LoadCloud()
 
                 local sigOk = false
                 if sigVal and tokenVal and rngVal then
-                    -- Tính toán chữ ký tuyệt đối với HWID đã gọt rác
                     local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
                     if sigVal == expectedSig then
                         sigOk = true
@@ -4025,7 +4019,6 @@ local function LoadCloud()
                 end
 
                 if not sigOk then
-                    -- NẾU LỖI NÀY HIỆN RA NGHĨA LÀ CODE MỚI NHẤT ĐÃ ĐƯỢC CHẠY
                     _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (Lỗi: HMAC_V99)")
                     _G._Authenticated_ = false
                     return
