@@ -3943,19 +3943,40 @@ local function LoadCloud()
         return table.concat(out)
     end
 
-    local function DoRequest(retryLeft)
+        local function DoRequest(retryLeft)
         if retryLeft == maxRetries then
             _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
-         -- 👉 Nhét thêm &model= vào chuỗi gửi đi
-         local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKey, hwid, deviceName)
+        
+        -- Gửi đầy đủ Key, HWID và Tên máy lên Server
+        local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKey, hwid, deviceName)
+        local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
+        local _sw = _sw_r:reverse()
+
+        -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT (HMAC)
+        local function SimpleHMAC(msg, key)
+            local keyBytes = {}
+            for i = 1, #key do keyBytes[i] = string.byte(key, i) end
+            local kLen = #keyBytes
+            local h = 5381
+            for i = 1, #msg do
+                local kb = keyBytes[((i-1) % kLen) + 1]
+                h = ((h * 31) + string.byte(msg, i) + kb) % 4294967296
+            end
+            local h2 = 0x12345678
+            for i = #msg, 1, -1 do
+                local kb = keyBytes[((#msg - i) % kLen) + 1]
+                h2 = ((h2 * 37) + string.byte(msg, i) + kb) % 4294967296
+            end
+            return string.format("%08x%08x", h, h2)
+        end
 
         http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
             if not success then
                 if retryLeft > 0 then
                     local delay   = 2 ^ (maxRetries - retryLeft + 1)
                     local errCode = tostring(result or "NIL")
-                    _G.AkmodNotify("Kết nối gặp sự cố [" .. netLabel .. "] (Mã: " .. errCode .. "). Thử lại sau " .. delay .. "s... (" .. retryLeft .. " lần)")
+                    _G.AkmodNotify("Kết nối gặp sự cố [" .. netLabel .. "] (Mã: " .. errCode .. "). Thử lại sau " .. delay .. "s...")
                     local ok_t, time_ticker = pcall(require, "common.time_ticker")
                     if ok_t and time_ticker and time_ticker.AddTimerOnce then
                         time_ticker.AddTimerOnce(delay, function() DoRequest(retryLeft - 1) end)
@@ -3987,7 +4008,25 @@ local function LoadCloud()
             local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
 
             if statusVal then
-                -- 👉 TẮT CHECK HMAC CHỐNG ĐỤNG ĐỘ HWID 100% (Vì XOR đã mã hóa tuyệt đối an toàn)
+                -- 🚀 BẬT LẠI LỚP BẢO MẬT HMAC ĐỂ ĐỐI CHIẾU SERVER
+                local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
+                local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
+                local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
+
+                local sigOk = false
+                if sigVal and tokenVal and rngVal then
+                    local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
+                    if sigVal:sub(1, 16) == expectedSig:sub(1, 16) then
+                        sigOk = true
+                    end
+                end
+
+                if not sigOk then
+                    _G.AkmodNotify("Cảnh báo: Phát hiện phản hồi bị giả mạo! (Sai chữ ký server)")
+                    _G._Authenticated_ = false
+                    return
+                end
+
                 _G._Authenticated_ = true                
                 ForceStart()
                 
