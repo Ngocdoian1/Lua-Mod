@@ -3940,7 +3940,7 @@ local function LoadCloud()
         return table.concat(out)
     end
 
-        local function DoRequest(retryLeft)
+            local function DoRequest(retryLeft)
         if retryLeft == maxRetries then
             _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
         end
@@ -4011,15 +4011,16 @@ local function LoadCloud()
 
                 local sigOk = false
                 if sigVal and tokenVal and rngVal then
+                    -- Tính toán chữ ký tuyệt đối với HWID đã gọt rác
                     local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
-                    -- So sánh chuẩn tuyệt đối 8 ký tự
                     if sigVal == expectedSig then
                         sigOk = true
                     end
                 end
 
                 if not sigOk then
-                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (Sai chữ ký HMAC 16-bit)")
+                    -- NẾU LỖI NÀY HIỆN RA NGHĨA LÀ CODE MỚI NHẤT ĐÃ ĐƯỢC CHẠY
+                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (Lỗi: HMAC_V99)")
                     _G._Authenticated_ = false
                     return
                 end
