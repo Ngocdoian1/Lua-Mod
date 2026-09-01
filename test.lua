@@ -1,3 +1,4 @@
+
 -- ==============================================================================
 -- ============================ BẮT ĐẦU FULL LOGIC MOD ==========================
 -- ==============================================================================
@@ -7026,34 +7027,6 @@ _G.FastTick = function()
     if okTicker and ticker and ticker.AddTimerOnce then 
         ticker.AddTimerOnce(0.01, _G.FastTick) 
     end 
-end
-
-_G.AkmodNotify = function(msg)
-  print("[AKMOD] Notify: " .. tostring(msg))
-  pcall(function()
-    local s4, LocUtil = pcall(require, "common.loc_util")
-    if s4 and LocUtil and LocUtil.ShowNotice then LocUtil.ShowNotice("AKMOD: " .. msg) end
-
-    local s3, IngameTipsTools = pcall(require, "GameLua.Mod.BaseMod.Common.UI.InGameTipsTools")
-    if s3 and IngameTipsTools then
-      if IngameTipsTools.BattleNormalTips then IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3) end
-      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") then
-        if IngameTipsTools.ShowMsgBox then IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg) end
-      end
-    end
-
-    local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
-    if s and GameplayData then
-      local uPlayerController = GameplayData.GetPlayerController()
-      if uPlayerController then
-        local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
-        if s2 and STExtraBlueprintFunctionLibrary then
-          local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
-          if chatComp and chatComp.AddMsgInClient then chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>") end
-        end
-      end
-    end
-  end)
 end
 
 local function ForceStart()
