@@ -186,8 +186,6 @@ _G.LexusState = _G.LexusState or {
     LastMagicConfigHash = "",
     PrevGraphicsState = {}
 }
-
-
 -- ========================================== 
 -- HÀM QUẢN LÝ DỌN RÁC MAP MARK (CHỐNG LAG/HIỂN THỊ ẢO KHI ĐỊCH CHẾT)
 -- ========================================== 
@@ -2575,7 +2573,9 @@ end
 
 -- VÒNG LẶP CHUNG (TÍNH TOÁN 1 LẦN CHO CẢ 2 UI ĐỂ CHỐNG DROP FPS)
 local function _M_DrawCounter()
-    if not _G._Authenticated_ then
+    if not _G._Authenticated_ then return end -- Thêm dòng này
+    -- (Code cũ giữ nguyên)
+
         _G.CleanUpEnemyCounterWidget()
         return
     end
@@ -5925,7 +5925,9 @@ end
 -- VÒNG LẶP CHÍNH (MAIN LOOP) TỐI ƯU CỰC MẠNH
 -- ========================================== 
 local function MainLoop()
-    if not _G._Authenticated_ then return end
+    if not _G._Authenticated_ then return end -- Thêm dòng này
+    -- (Code cũ giữ nguyên)
+
 
     -- =====================================================================
     -- HỆ THỐNG LẤY HWID GỐC & ĐỔI HWID ẢO (SPOOFER) CHỐNG BAN
@@ -7699,13 +7701,19 @@ local function ExpiredTick()
     end
 end
 
--- ===================================================================================
--- 🚀 1. VÒNG LẶP CHÍNH (ĐÃ KHÓA)
--- ===================================================================================
 local function FastTick() 
-    if not _G._Authenticated_ then return end -- CHẶN KHI CHƯA CÓ KEY TỪ SERVER!
+    if not _G._Authenticated_ then return end -- Thêm dòng này
+    -- (Nhớ xóa mấy cái dòng if isExpired cũ ở trong hàm này luôn nha)
 
-    if _G.myToken ~= _G.LexusState.LoopToken then return end
+        if not _G.LexusNotifiedExpire then
+            Notify("MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox ngocdoian Để Mua Nếu Ai Đó Đã Bán Cho Bạn Thứ Này Ngoài Tôi Thì Xin Chúc Mừng Bạn Đã Bị Lừa")
+            _G.LexusNotifiedExpire = true
+            ExpiredTick() 
+        end
+        return 
+    end
+
+    if myToken ~= _G.LexusState.LoopToken then return end
     pcall(MainLoop) 
     local okTicker, ticker = pcall(require, "common.time_ticker") 
     if okTicker and ticker and ticker.AddTimerOnce then 
@@ -7713,168 +7721,11 @@ local function FastTick()
     end 
 end
 
--- ===================================================================================
--- 🛡️ 2. HỆ THỐNG BẢO MẬT & CHECK KEY SERVER (TÍCH HỢP TRỰC TIẾP)
--- ===================================================================================
-_G._Authenticated_ = false
-
-local function ForceStartMod()
-    if _G.InitModMenuTab then _G.InitModMenuTab() end
-    if type(InitializeNativeESP) == "function" then InitializeNativeESP() end
-    pcall(function() if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end end)
-    if type(ShowLexusVIPMenu) == "function" then ShowLexusVIPMenu() end
-    
-    -- Kích hoạt FastTick sau khi Menu bung lên
-    _G.LexusState.LoopToken = (_G.LexusState.LoopToken or 0) + 1 
-    _G.myToken = _G.LexusState.LoopToken
-    FastTick()
-end
-
-local function CheckKeyToServer()
-    if _G._Authenticated_ then return end
-
-    local M_Manager = package.loaded["client.logic.module.ModuleManager"] or _G.ModuleManager or require("client.logic.module.ModuleManager")
-    if not M_Manager then return end
-    local http_manager = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
-    if not http_manager then return end
-
-    local function GetUserKey()
-        if Client and Client.LoadFileToString then
-            local attempt1 = Client.LoadFileToString("Paks/AKMOD_VIP_KEY.txt")
-            if attempt1 and attempt1 ~= "" then return attempt1:gsub("[%s\r\n]+", ""), "Paks/" end
-            local attempt2 = Client.LoadFileToString("AKMOD_VIP_KEY.txt")
-            if attempt2 and attempt2 ~= "" then return attempt2:gsub("[%s\r\n]+", ""), "" end
-        end
-        return nil, nil
-    end
-
-    local userKey, _ = GetUserKey()
-    if not userKey or userKey == "" then
-        print("[VIP MOD] Lỗi: Không tìm thấy file AKMOD_VIP_KEY.txt!")
-        return
-    end
-
-    local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
-    if not myUid or myUid == "" then return end
-    local hwid = tostring(myUid):gsub("[%s\r\n]+", "")
-    local userKeySafe = tostring(userKey):gsub("[^%w%-]", "")
-
-    local deviceName = "Unknown"
-    pcall(function()
-        local brand = ""
-        local model = ""
-        if Client then
-            if type(Client.GetDeviceBrand) == "function" then brand = Client.GetDeviceBrand() or "" end
-            if brand == "" and type(Client.GetPhoneBrand) == "function" then brand = Client.GetPhoneBrand() or "" end
-            if type(Client.GetDeviceModel) == "function" then model = Client.GetDeviceModel() or "" end
-            if model == "" and type(Client.GetPhoneModel) == "function" then model = Client.GetPhoneModel() or "" end
-        end
-        brand = tostring(brand):gsub("[%s\r\n]+", ""):gsub("[^%w]", "")
-        model = tostring(model):gsub("[%s\r\n]+", ""):gsub("[^%w%-]", "")
-        if brand ~= "" or model ~= "" then deviceName = brand .. "_" .. model end
-    end)
-
-    local apiUrl  = "https://akmod.online:2053/api/check_free"
-    local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
-    local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
-    local _sw = "Vm8kLk7Uj2JmJsCPVPVjrLa7zgfx3uz9E"
-
-    local function EngineUnpack(str)
-        if not str or str == "" then return nil end
-        local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-        local s = str:gsub('[\r\n%s]', '')
-        s = s:gsub('%-', '+'):gsub('_', '/')
-        local pad = #s % 4
-        if pad > 0 then s = s .. string.rep('=', 4 - pad) end
-
-        local b = {}
-        for i = 1, #s, 4 do
-            local c1 = b64chars:find(s:sub(i,   i),   1, true)
-            local c2 = b64chars:find(s:sub(i+1, i+1), 1, true)
-            local c3 = b64chars:find(s:sub(i+2, i+2), 1, true)
-            local c4 = b64chars:find(s:sub(i+3, i+3), 1, true)
-            if not c1 or not c2 then break end
-            c1, c2 = c1 - 1, c2 - 1
-            c3 = c3 and (c3 - 1) or 0
-            c4 = c4 and (c4 - 1) or 0
-            local n = (c1 * 262144) + (c2 * 4096) + (c3 * 64) + c4
-            b[#b+1] = string.char(math.floor(n / 65536) % 256)
-            if s:sub(i+2, i+2) ~= '=' then b[#b+1] = string.char(math.floor(n / 256) % 256) end
-            if s:sub(i+3, i+3) ~= '=' then b[#b+1] = string.char(n % 256) end
-        end
-        local raw = table.concat(b)
-
-        local K = {0x7B, 0x21, 0xC5, 0xE2, 0x9A, 0x3F, 0x44, 0x10, 0xD8, 0x6C, 0xB2, 0x0E, 0x55, 0xA9, 0x71, 0x3D}
-        local out = {}
-        local bxor_fn = (bit and bit.bxor) or (bit32 and bit32.bxor) or function(a, x)
-            local r, m = 0, 128
-            while m >= 1 do
-                local va = (a >= m) and 1 or 0; local vb = (x >= m) and 1 or 0
-                if va ~= vb then r = r + m end
-                if a >= m then a = a - m end; if x >= m then x = x - m end
-                m = m / 2
-            end
-            return r
-        end
-        for i = 1, #raw do
-            local k = K[((i - 1) % 16) + 1]
-            out[#out+1] = string.char(bxor_fn(string.byte(raw, i), k))
-        end
-        return table.concat(out)
-    end
-
-    local function SimpleHMAC(msg, key)
-        local keyBytes = {}
-        for i = 1, #key do keyBytes[i] = string.byte(key, i) end
-        local kLen = #keyBytes
-        local sum1, sum2 = 0, 0
-        for i = 1, #msg do
-            sum1 = (sum1 + string.byte(msg, i) * i + keyBytes[((i-1) % kLen) + 1]) % 65535
-            sum2 = (sum2 + string.byte(msg, i) * keyBytes[((#msg - i) % kLen) + 1] + (i - 1)) % 65535
-        end
-        return string.format("%04x%04x", sum1, sum2)
-    end
-
-    local function DoRequest(retryLeft)
-        http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
-            if not success then
-                if retryLeft > 0 then
-                    local ok_t, time_ticker = pcall(require, "common.time_ticker")
-                    if ok_t and time_ticker and time_ticker.AddTimerOnce then
-                        time_ticker.AddTimerOnce(2, function() DoRequest(retryLeft - 1) end)
-                    end
-                end
-                return
-            end
-
-            if not data or data == "" then return end
-            local rawData = data
-            if not data:find('{"status"', 1, true) then
-                local unpacked = EngineUnpack(data)
-                if unpacked and unpacked:find('{"status"', 1, true) then rawData = unpacked end
-            end
-
-            local sData = tostring(rawData)
-            local statusVal = sData:match('"status"%s*:%s*(true)') or sData:match('"status"%s*:%s*(1[^%d])')
-            
-            if statusVal then
-                local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
-                local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
-                local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
-
-                if sigVal and tokenVal and rngVal then
-                    local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
-                    if sigVal == expectedSig then
-                        _G._Authenticated_ = true                
-                        print("[VIP MOD] Xác thực Key thành công!")
-                        ForceStartMod() -- Mở Menu và bật FastTick
-                        return
-                    end
-                end
-            end
-        end, 30)
-    end
-    DoRequest(3)
+if not isExpired then
+    FastTick() 
+    Notify("Bạn Đang Chơi Mod Vvip 4 Của Tôi Nếu Chưa Có Key Inbox ngocdoian Để Mua Nếu Ai Đó Đã Bán Cho Bạn Thứ Này Ngoài Tôi Thì Xin Chúc Mừng Bạn Đã Bị Lừa")
+else
+    FastTick() 
 end
 
 -- ===================================================================================
@@ -17548,4 +17399,4 @@ end)
 end -- ĐÓNG HÀM EnableHeavyLogic_ModSkin LẠI TẠI ĐÂY
 -- ==============================================================================
 -- ================= KẾT THÚC CORE ADD-OUTFIT V7.5 (HỆ THỐNG SKIN) ==============
--- ==============================================================================
+-- =============================================================================
