@@ -16,7 +16,7 @@ local function Valid(obj)
 end
 
 -- [1. CẤU HÌNH & STATE]
-_G.VIPConfig = _G.VIPConfig or { IpadView = false, IpadViewVehicle = false }
+_G.VIPConfig = _G.VIPConfig or { IpadView = true, IpadViewVehicle = true }
 _G.VIPState = _G.VIPState or { IpadViewFOV = 120, IpadViewVehicleFOV = 120, MenuInitialized = false }
 
 -- [2. HỆ THỐNG LƯU/TẢI SETTING TỰ ĐỘNG]
