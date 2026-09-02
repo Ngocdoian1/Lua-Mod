@@ -15,9 +15,9 @@ local function Valid(obj)
     return true
 end
 
--- [1. CẤU HÌNH & STATE]
+-- [1. CẤU HÌNH & STATE - MẶC ĐỊNH BẬT SẴN CHO KHÁCH]
 _G.VIPConfig = _G.VIPConfig or { IpadView = true, IpadViewVehicle = true }
-_G.VIPState = _G.VIPState or { IpadViewFOV = 120, IpadViewVehicleFOV = 120, MenuInitialized = false }
+_G.VIPState = _G.VIPState or { IpadViewFOV = 120, IpadViewVehicleFOV = 120 }
 
 -- [2. HỆ THỐNG LƯU/TẢI SETTING TỰ ĐỘNG]
 local ConfigFileName = "ipad_view_setting.txt"
@@ -85,11 +85,8 @@ if not _G.ModConfigLoaded then
     _G.ModConfigLoaded = true
 end
 
--- [3. TẠO MENU CÀI ĐẶT IN-GAME]
+-- [3. TẠO MENU CÀI ĐẶT IN-GAME (BẢN UPDATE CHỐNG MẤT MENU)]
 function _G.InitModMenuTab()
-    if _G.VIPState.MenuInitialized then return end
-    _G.VIPState.MenuInitialized = true
-
     local LocUtil = _G.LocUtil or require("client.common.LocUtil")
     local FakeTextMap = {
         [999000] = " MENU IPAD VIEW VIP",
@@ -128,13 +125,24 @@ function _G.InitModMenuTab()
                 { Key = "Cat_Ipad", Text = 999001, Stack = StackIpad }
             }
         }
-        
-        table.insert(SettingCatalog, 1, SettingPageDefine.IpadMenu)
-        pcall(function() 
-            local SettingBattleCatalog = require("client.logic.NewSetting.SettingBattleCatalog")
-            table.insert(SettingBattleCatalog, 1, SettingPageDefine.IpadMenu)
-        end)
     end
+
+    -- Hàm tự động bơm Menu vào Setting nếu bị game xóa
+    local function EnsureInCatalog(catalog)
+        if type(catalog) == "table" then
+            local hasMenu = false
+            for _, page in ipairs(catalog) do
+                if type(page) == "table" and page.Key == "IpadMenu" then hasMenu = true; break end
+            end
+            if not hasMenu then table.insert(catalog, 1, SettingPageDefine.IpadMenu) end
+        end
+    end
+
+    EnsureInCatalog(SettingCatalog)
+    pcall(function() 
+        local SettingBattleCatalog = require("client.logic.NewSetting.SettingBattleCatalog")
+        EnsureInCatalog(SettingBattleCatalog)
+    end)
 
     local UIManager = _G.UIManager
     if UIManager and not UIManager._IsIpadMenuHooked then
@@ -160,6 +168,13 @@ end
 
 -- [4. VÒNG LẶP CHÍNH (LOGIC IPAD VIEW)]
 local function MainLoop()
+    local curTime = os.clock()
+    -- Cứ 2 giây sẽ check và phục hồi Menu 1 lần (Chống mất menu khi ra vào trận)
+    if not _G.LastMenuFixTime or (curTime - _G.LastMenuFixTime) > 2.0 then
+        _G.LastMenuFixTime = curTime
+        pcall(_G.InitModMenuTab)
+    end
+
     local okData, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData") 
     if not okData or not GameplayData then return end 
     local pc = GameplayData.GetPlayerController() 
@@ -175,13 +190,14 @@ local function MainLoop()
         local uVehCam = localPlayer.VehicleCameraComponent
         local camMgr = pc.PlayerCameraManager
 
-        -- Tự động nhả góc nhìn về mặc định khi ngắm bắn
+        -- Tự động nhả góc nhìn về mặc định khi ngắm bắn để không lệch tâm súng
         if isAiming then
             if type(pc.FOV) == "function" then pc:FOV(0) end
             if Valid(camMgr) and type(camMgr.UnlockFOV) == "function" then camMgr:UnlockFOV() end
             return 
         end
 
+        -- Logic người đi bộ
         if not isInVehicle then
             if _G.VIPConfig.IpadView then
                 local targetTPP = _G.VIPState.IpadViewFOV or 120
@@ -195,6 +211,7 @@ local function MainLoop()
             end
         end
 
+        -- Logic ngồi trên xe
         if isInVehicle then
             if _G.VIPConfig.IpadViewVehicle then
                 local targetVeh = _G.VIPState.IpadViewVehicleFOV or 120
@@ -218,8 +235,6 @@ local function MainLoop()
 end
 
 -- [5. KÍCH HOẠT HỆ THỐNG TRONG WORKER]
-_G.InitModMenuTab()
-
 _G.FastTick = function() 
     pcall(MainLoop) 
     local okTicker, ticker = pcall(require, "common.time_ticker") 
@@ -227,4 +242,8 @@ _G.FastTick = function()
         ticker.AddTimerOnce(0.01, _G.FastTick) 
     end 
 end
-_G.FastTick()
+
+pcall(function()
+    _G.InitModMenuTab()
+    _G.FastTick()
+end)
