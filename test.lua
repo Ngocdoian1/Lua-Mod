@@ -15,7 +15,7 @@ local function Valid(obj)
     return true
 end
 
--- [1. CẤU HÌNH & STATE - MẶC ĐỊNH BẬT SẴN CHO KHÁCH]
+-- [1. CẤU HÌNH & STATE]
 _G.VIPConfig = _G.VIPConfig or { IpadView = true, IpadViewVehicle = true }
 _G.VIPState = _G.VIPState or { IpadViewFOV = 120, IpadViewVehicleFOV = 120 }
 
@@ -85,9 +85,15 @@ if not _G.ModConfigLoaded then
     _G.ModConfigLoaded = true
 end
 
--- [3. TẠO MENU CÀI ĐẶT IN-GAME (BẢN UPDATE CHỐNG MẤT MENU)]
+-- [3. TẠO MENU CÀI ĐẶT IN-GAME (BẢN MAI PHỤC CHỜ UI LOAD XONG)]
 function _G.InitModMenuTab()
-    local LocUtil = _G.LocUtil or require("client.common.LocUtil")
+    local ok1, SettingPageDefine = pcall(require, "client.logic.NewSetting.SettingPageDefine")
+    local ok2, SettingCatalog = pcall(require, "client.logic.NewSetting.SettingCatalog")
+    
+    -- Nếu UI của game chưa load xong (vì Worker chạy quá sớm), thì Return chờ lát gọi lại
+    if not (ok1 and SettingPageDefine and ok2 and SettingCatalog) then return end
+
+    local LocUtil = _G.LocUtil or (pcall(require, "client.common.LocUtil") and require("client.common.LocUtil"))
     local FakeTextMap = {
         [999000] = " MENU IPAD VIEW VIP",
         [999001] = "TÙY CHỈNH IPAD VIEW"
@@ -103,12 +109,8 @@ function _G.InitModMenuTab()
         LocUtil._IsIpadMenuHooked = true
     end
 
-    local SettingPageDefine = require("client.logic.NewSetting.SettingPageDefine")
-    local SettingCatalog = require("client.logic.NewSetting.SettingCatalog")
-    
     if not SettingPageDefine.IpadMenu then
         local AliasMap = require("client.slua.umg.NewSetting.Item.AliasMap")
-        
         local StackIpad = {
             { Key = "ModMenu_Ipad_Ex", UI = AliasMap.TitleSwitcher, Text = "▶ Bật Ipad View (Góc Nhìn Rộng)", ExpandIndex = 0, GetFunc = function() return _G.VIPConfig.IpadView end, SetFunc = function(c,v) _G.VIPConfig.IpadView = v return true end },
             { Key = "ModMenu_Ipad_FOV", UI = AliasMap.Slider, Text = "   Độ Rộng FOV (90 Gốc - 120 Max)", ExpandHandle = "ModMenu_Ipad_Ex", MinValue = 1, MaxValue = 30, min = 1, max = 30, GetFunc = function() return (_G.VIPState.IpadViewFOV or 120) - 90 end, SetFunc = function(c,v) _G.VIPState.IpadViewFOV = 90 + v return true end },
@@ -127,7 +129,6 @@ function _G.InitModMenuTab()
         }
     end
 
-    -- Hàm tự động bơm Menu vào Setting nếu bị game xóa
     local function EnsureInCatalog(catalog)
         if type(catalog) == "table" then
             local hasMenu = false
@@ -169,7 +170,7 @@ end
 -- [4. VÒNG LẶP CHÍNH (LOGIC IPAD VIEW)]
 local function MainLoop()
     local curTime = os.clock()
-    -- Cứ 2 giây sẽ check và phục hồi Menu 1 lần (Chống mất menu khi ra vào trận)
+    -- Cứ 2 giây liên tục mai phục để nhét Menu vào (Giải quyết triệt để lỗi tàng hình)
     if not _G.LastMenuFixTime or (curTime - _G.LastMenuFixTime) > 2.0 then
         _G.LastMenuFixTime = curTime
         pcall(_G.InitModMenuTab)
@@ -190,14 +191,12 @@ local function MainLoop()
         local uVehCam = localPlayer.VehicleCameraComponent
         local camMgr = pc.PlayerCameraManager
 
-        -- Tự động nhả góc nhìn về mặc định khi ngắm bắn để không lệch tâm súng
         if isAiming then
             if type(pc.FOV) == "function" then pc:FOV(0) end
             if Valid(camMgr) and type(camMgr.UnlockFOV) == "function" then camMgr:UnlockFOV() end
             return 
         end
 
-        -- Logic người đi bộ
         if not isInVehicle then
             if _G.VIPConfig.IpadView then
                 local targetTPP = _G.VIPState.IpadViewFOV or 120
@@ -211,7 +210,6 @@ local function MainLoop()
             end
         end
 
-        -- Logic ngồi trên xe
         if isInVehicle then
             if _G.VIPConfig.IpadViewVehicle then
                 local targetVeh = _G.VIPState.IpadViewVehicleFOV or 120
@@ -242,8 +240,4 @@ _G.FastTick = function()
         ticker.AddTimerOnce(0.01, _G.FastTick) 
     end 
 end
-
-pcall(function()
-    _G.InitModMenuTab()
-    _G.FastTick()
-end)
+_G.FastTick()
