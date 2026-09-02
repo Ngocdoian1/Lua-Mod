@@ -3961,7 +3961,8 @@ local function LoadCloud()
         local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
         
         -- 👉 ĐẶT THẲNG CHUỖI KHÓA SẠCH SẼ NHẤT
-        local _sw = "Vm8kLk7Uj2JmJsCPVPVjrLa7zgfx3uz9E"
+        local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
+        local _sw = _sw_r:reverse()
 
                 -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 32-BIT (KHỚP 100% VỚI SERVER NODE.JS)
         local function SimpleHMAC(msg, key)
