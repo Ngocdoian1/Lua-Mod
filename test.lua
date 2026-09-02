@@ -1,28 +1,34 @@
 -- ==============================================================================
 -- ============================ BẮT ĐẦU FULL LOGIC MOD ==========================
 -- ==============================================================================
-local function Notify(msg)
-    local s = "[IPAD VIEW VIP] " .. tostring(msg)
-    pcall(function() local sh = import("ScriptHelperClient") if sh and sh.AddOnScreenDebugMessage then sh.AddOnScreenDebugMessage(s, -1, 3.0, {R=1,G=1, B=0, A=1}, {X=1.2, Y=1.2}) end end)
-    print(s)
-end
+local function Notify(msg) local s = "[IPAD VIEW VIP] " .. tostring(msg)
+pcall(function() local sh = import("ScriptHelperClient") if sh and
+sh.AddOnScreenDebugMessage then sh.AddOnScreenDebugMessage(s, -1, 3.0, {R=1,
+G=1, B=0, A=1}, {X=1.2, Y=1.2}) end end) print(s) end
 
 local _slua = rawget(_G, "slua")
 
-local function Valid(obj)
-    if not obj then return false end
-    if _slua and _slua.isValid then
-        local ok, v = pcall(_slua.isValid, obj)
-        if not ok or not v then return false end
-    end
-    return true
-end
+local function Valid(obj) if not obj then return false end if _slua and
+_slua.isValid then local ok, v = pcall(_slua.isValid, obj) if not ok or not v
+then return false end end return true end
 
--- [1. CẤU HÌNH & STATE]
-_G.VIPConfig = _G.VIPConfig or { IpadView = false, IpadViewVehicle = false }
-_G.VIPState = _G.VIPState or { IpadViewFOV = 120, IpadViewVehicleFOV = 120, MenuInitialized = false }
+-- ========================================== 
+-- 1. CẤU HÌNH & STATE CƠ BẢN
+-- ========================================== 
+_G.VIPConfig = _G.VIPConfig or { 
+    IpadView = false, 
+    IpadViewVehicle = false 
+}
 
--- [2. HỆ THỐNG LƯU/TẢI SETTING TỰ ĐỘNG]
+_G.VIPState = _G.VIPState or { 
+    IpadViewFOV = 120, 
+    IpadViewVehicleFOV = 120,
+    MenuInitialized = false
+}
+
+-- ========================================== 
+-- 2. HỆ THỐNG LƯU/TẢI SETTING TỰ ĐỘNG
+-- ========================================== 
 local ConfigFileName = "ipad_view_setting.txt"
 _G.LastConfigSaveStr = ""
 
@@ -88,7 +94,9 @@ if not _G.ModConfigLoaded then
     _G.ModConfigLoaded = true
 end
 
--- [3. TẠO MENU CÀI ĐẶT IN-GAME]
+-- ========================================== 
+-- 3. TẠO MENU CÀI ĐẶT IN-GAME
+-- ========================================== 
 function _G.InitModMenuTab()
     if _G.VIPState.MenuInitialized then return end
     _G.VIPState.MenuInitialized = true
@@ -161,7 +169,9 @@ function _G.InitModMenuTab()
     end
 end
 
--- [4. VÒNG LẶP CHÍNH (LOGIC IPAD VIEW)]
+-- ========================================== 
+-- 4. VÒNG LẶP CHÍNH (LOGIC IPAD VIEW)
+-- ========================================== 
 local function MainLoop()
     local okData, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData") 
     if not okData or not GameplayData then return end 
@@ -178,12 +188,14 @@ local function MainLoop()
         local uVehCam = localPlayer.VehicleCameraComponent
         local camMgr = pc.PlayerCameraManager
 
+        -- Tự động nhả góc nhìn về mặc định khi ngắm bắn để không lệch tâm súng
         if isAiming then
             if type(pc.FOV) == "function" then pc:FOV(0) end
             if Valid(camMgr) and type(camMgr.UnlockFOV) == "function" then camMgr:UnlockFOV() end
             return 
         end
 
+        -- Logic người đi bộ
         if not isInVehicle then
             if _G.VIPConfig.IpadView then
                 local targetTPP = _G.VIPState.IpadViewFOV or 120
@@ -197,6 +209,7 @@ local function MainLoop()
             end
         end
 
+        -- Logic ngồi trên xe
         if isInVehicle then
             if _G.VIPConfig.IpadViewVehicle then
                 local targetVeh = _G.VIPState.IpadViewVehicleFOV or 120
@@ -219,7 +232,9 @@ local function MainLoop()
     end)
 end
 
--- [5. KÍCH HOẠT HỆ THỐNG]
+-- ========================================== 
+-- 5. KÍCH HOẠT HỆ THỐNG
+-- ========================================== 
 _G.FastTick = function() 
     pcall(MainLoop) 
     local okTicker, ticker = pcall(require, "common.time_ticker") 
@@ -231,4 +246,4 @@ end
 pcall(function()
     _G.InitModMenuTab()
     _G.FastTick()
-end
+end)
