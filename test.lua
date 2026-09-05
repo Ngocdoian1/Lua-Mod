@@ -3768,63 +3768,295 @@ local function MainLoop()
 end
 
 _G.XthrlenState.LoopToken = (_G.XthrlenState.LoopToken or 0) + 1 
-local myToken = _G.XthrlenState.LoopToken
+_G.myToken = _G.XthrlenState.LoopToken -- FIX LỖI LOCAL: Sửa thành _G.myToken để các chức năng chạy được
 
-local function ExpiredTick()
-    if not _G.XthrlenNotifiedPopup then
-        pcall(function()
-            local Msg = require("client.slua.logic.common.logic_common_msg_box")
-            if Msg and Msg.Show then
-                Msg.Show(1, "MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian", 
-                function() 
-                    local Web = require("client.slua.logic.url.logic_webview_sdk")
-                    if Web and Web.OpenURL then Web:OpenURL("https://t.me/ngocdoian") end 
-                end, 
-                function() end, "INBOX CHỦ MOD", "ĐÓNG")
-                _G.XthrlenNotifiedPopup = true 
-            end
-        end)
-        
-        if not _G.XthrlenNotifiedPopup then
-            local okTicker, ticker = pcall(require, "common.time_ticker") 
-            if okTicker and ticker and ticker.AddTimerOnce then 
-                ticker.AddTimerOnce(2.0, ExpiredTick) 
-            end
-        end
-    end
-end
+-- =======================================================
+-- CHỐT CHẶN BẢO MẬT & THÔNG BÁO CAO CẤP AKMOD
+-- =======================================================
+_G._Authenticated_ = false
 
-local function FastTick() 
-    if isExpired then 
-        if not _G.XthrlenNotifiedExpire then
-            Notify("MOD ĐÃ HẾT HẠN! VUI LÒNG INBOX ADMIN ĐỂ GIA HẠN!\nInbox Tele  @ngocdoian")
-            _G.XthrlenNotifiedExpire = true
-            ExpiredTick() 
-        end
-        return 
-    end
+-- FIX LỖI LIỆT CHỨC NĂNG: Thêm lại trái tim (FastTick) để kích hoạt Aimbot & ESP
+_G.FastTick = function() 
+    if not _G._Authenticated_ then return end 
 
-    if myToken ~= _G.XthrlenState.LoopToken then return end
+    if _G.myToken ~= _G.XthrlenState.LoopToken then return end
     pcall(MainLoop) 
     local okTicker, ticker = pcall(require, "common.time_ticker") 
     if okTicker and ticker and ticker.AddTimerOnce then 
-        ticker.AddTimerOnce(0.01, FastTick) 
+        ticker.AddTimerOnce(0.01, _G.FastTick) 
     end 
 end
 
-if not isExpired then
-    FastTick() 
-    Notify("Bạn Đang Chơi Mod V2\n ĐÂY LÀ BẢN FREE NẾU BẠN KUA CỦA AI ĐÓ THÌ BẠN ĐÃ BỊ SCAM RỒI.")
-else
-    FastTick() 
+_G.AkmodNotify = function(msg)
+  print("[AKMOD] Notify: " .. tostring(msg))
+  pcall(function()
+    -- FIX LỖI NHẢY CHỮ 2 LẦN: Xóa lệnh LocUtil.ShowNotice
+
+    local s3, IngameTipsTools = pcall(require, "GameLua.Mod.BaseMod.Common.UI.InGameTipsTools")
+    if s3 and IngameTipsTools then
+      if IngameTipsTools.BattleNormalTips then IngameTipsTools.BattleNormalTips("AKMOD: " .. msg, 2, 3) end
+      if string.find(msg, "Lỗi") or string.find(msg, "thất bại") or string.find(msg, "Từ chối") then
+        if IngameTipsTools.ShowMsgBox then IngameTipsTools.ShowMsgBox(1, "AKMOD Thông Báo", msg) end
+      end
+    end
+
+    local s, GameplayData = pcall(require, "GameLua.GameCore.Data.GameplayData")
+    if s and GameplayData then
+      local uPlayerController = GameplayData.GetPlayerController()
+      if uPlayerController then
+        local s2, STExtraBlueprintFunctionLibrary = pcall(import, "STExtraBlueprintFunctionLibrary")
+        if s2 and STExtraBlueprintFunctionLibrary then
+          local chatComp = STExtraBlueprintFunctionLibrary.GetChatComponentFromController(uPlayerController)
+          if chatComp and chatComp.AddMsgInClient then chatComp:AddMsgInClient("<ChatQuickMsg>" .. msg .. "</>") end
+        end
+      end
+    end
+  end)
 end
 
-local function InitAllModSystems()
+-- Định nghĩa hàm ForceStart() để mở Menu VIP của AKMOD
+local function ForceStart()
+    if _G.InitModMenuTab then _G.InitModMenuTab() end
+    if _G.FastTick then _G.FastTick() end
+    pcall(function() if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end end)
+end
+
+
+-- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
+-- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
+-- Đổi từ function CharacterBase:LoadCloud() thành local function để xài được trong test.lua
+local function LoadCloud()
+    if _G._Authenticated_ then return end
+
+    local M_Manager = package.loaded["client.logic.module.ModuleManager"] or _G.ModuleManager or require("client.logic.module.ModuleManager")
+    local http_manager = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
+    if not http_manager then return end
+
+    local function GetUserKey()
+        if Client and Client.LoadFileToString then
+            local attempt1 = Client.LoadFileToString("Paks/AKMOD_VIP_KEY.txt")
+            if attempt1 and attempt1 ~= "" then
+                return attempt1:gsub("[%s\r\n]+", ""), "Paks/"
+            end
+            local attempt2 = Client.LoadFileToString("AKMOD_VIP_KEY.txt")
+            if attempt2 and attempt2 ~= "" then
+                return attempt2:gsub("[%s\r\n]+", ""), ""
+            end
+        end
+        return nil, nil
+    end
+
+    local userKey, keyPath = GetUserKey()
+    if not userKey or userKey == "" then
+        _G.AkmodNotify("Lỗi: Không tìm thấy file AKMOD_VIP_KEY.txt!")
+        return
+    end
+
+    local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
+    if not myUid or myUid == "" then
+        _G.AkmodNotify("Lỗi: UID không hợp lệ hoặc game chưa load xong!")
+        return
+    end
+
+    -- 🚀 FIX CỨNG HMAC TẠI ĐÂY: Loại bỏ 100% các ký tự lạ, dấu cộng, dấu bằng...
+    -- Chỉ giữ lại duy nhất Chữ cái và Số để đảm bảo Server và Lua tính chữ ký giống hệt nhau
+    local hwid = tostring(myUid):gsub("[^%w]", "")
+    local userKeySafe = tostring(userKey):gsub("[^%w%-]", "")
+
+    -- 👉 Máy quét siêu âm: Bốc Hãng + Mã Máy + Tên tự đặt
+    local deviceName = "Unknown"
     pcall(function()
-        if _G.InitializeAutoHeadHooks then _G.InitializeAutoHeadHooks() end
+        local brand = ""
+        local model = ""
+        local customName = ""
+        
+        if Client then
+            if type(Client.GetDeviceBrand) == "function" then brand = Client.GetDeviceBrand() or "" end
+            if brand == "" and type(Client.GetPhoneBrand) == "function" then brand = Client.GetPhoneBrand() or "" end
+            
+            if type(Client.GetDeviceModel) == "function" then model = Client.GetDeviceModel() or "" end
+            if model == "" and type(Client.GetPhoneModel) == "function" then model = Client.GetPhoneModel() or "" end
+            
+            if type(Client.GetDeviceName) == "function" then customName = Client.GetDeviceName() or "" end
+        end
+
+        brand = tostring(brand):gsub("[%s\r\n]+", ""):gsub("[^%w]", "")
+        model = tostring(model):gsub("[%s\r\n]+", ""):gsub("[^%w%-]", "")
+        customName = tostring(customName):gsub("[%s\r\n]+", "_"):gsub("[^%w%_]", "")
+
+        local parts = {}
+        if brand ~= "" then table.insert(parts, brand) end
+        if model ~= "" then table.insert(parts, model) end
+        if customName ~= "" and customName ~= "Unknown" then table.insert(parts, customName) end
+
+        if #parts > 0 then
+            deviceName = table.concat(parts, "___")
+        end
     end)
+
+    local netType  = (Client and Client.GetNetWorkType) and Client.GetNetWorkType() or "unknown"
+    local netLabel = (netType == "Wifi" and "WiFi")
+                  or (netType == "4G"   and "4G")
+                  or (netType == "3G"   and "3G/Yếu")
+                  or (netType == "2G"   and "2G/Rất yếu")
+                  or netType
+
+    local apiUrl  = "https://akmod.online:2053/api/check_free"
+    local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
+    local maxRetries = 3
+
+    local function EngineUnpack(str)
+        if not str or str == "" then return nil end
+        local b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        local s = str:gsub('[\r\n%s]', '')
+        s = s:gsub('%-', '+'):gsub('_', '/')
+        local pad = #s % 4
+        if pad > 0 then s = s .. string.rep('=', 4 - pad) end
+
+        local b = {}
+        local len = #s
+        for i = 1, len, 4 do
+            local c1 = b64chars:find(s:sub(i,   i),   1, true)
+            local c2 = b64chars:find(s:sub(i+1, i+1), 1, true)
+            local c3 = b64chars:find(s:sub(i+2, i+2), 1, true)
+            local c4 = b64chars:find(s:sub(i+3, i+3), 1, true)
+            if not c1 or not c2 then break end
+            c1, c2 = c1 - 1, c2 - 1
+            c3 = c3 and (c3 - 1) or 0
+            c4 = c4 and (c4 - 1) or 0
+            local n = (c1 * 262144) + (c2 * 4096) + (c3 * 64) + c4
+            b[#b+1] = string.char(math.floor(n / 65536) % 256)
+            if s:sub(i+2, i+2) ~= '=' then b[#b+1] = string.char(math.floor(n / 256) % 256) end
+            if s:sub(i+3, i+3) ~= '=' then b[#b+1] = string.char(n % 256) end
+        end
+        local raw = table.concat(b)
+
+        local K = {0x7B, 0x21, 0xC5, 0xE2, 0x9A, 0x3F, 0x44, 0x10, 0xD8, 0x6C, 0xB2, 0x0E, 0x55, 0xA9, 0x71, 0x3D}
+        local out = {}
+        local bxor_fn = (bit and bit.bxor) or (bit32 and bit32.bxor) or function(a, x)
+            local r, m = 0, 128
+            while m >= 1 do
+                local va = (a >= m) and 1 or 0
+                local vb = (x >= m) and 1 or 0
+                if va ~= vb then r = r + m end
+                if a >= m then a = a - m end
+                if x >= m then x = x - m end
+                m = m / 2
+            end
+            return r
+        end
+        for i = 1, #raw do
+            local k = K[((i - 1) % 16) + 1]
+            out[#out+1] = string.char(bxor_fn(string.byte(raw, i), k))
+        end
+        return table.concat(out)
+    end
+
+                local function DoRequest(retryLeft)
+        if retryLeft == maxRetries then
+            _G.AkmodNotify("Đang xác thực key qua server... [" .. netLabel .. "]")
+        end
+        
+        -- Gọi URL gởi sạch sẽ
+        local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
+        
+        -- 👉 ĐẶT THẲNG CHUỖI KHÓA SẠCH SẼ NHẤT
+        local _sw_r = "E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV"
+        local _sw = _sw_r:reverse()
+
+                -- HÀM MÃ HÓA CHỮ KÝ BẢO MẬT 32-BIT (KHỚP 100% VỚI SERVER NODE.JS)
+        local function SimpleHMAC(msg, key)
+            local keyBytes = {}
+            for i = 1, #key do keyBytes[i] = string.byte(key, i) end
+            local kLen = #keyBytes
+            local h = 5381
+            for i = 1, #msg do
+                local kb = keyBytes[((i-1) % kLen) + 1]
+                h = ((h * 31) + string.byte(msg, i) + kb) % 4294967296
+            end
+            local h2 = 0x12345678
+            for i = #msg, 1, -1 do
+                local kb = keyBytes[((#msg - i) % kLen) + 1]
+                h2 = ((h2 * 37) + string.byte(msg, i) + kb) % 4294967296
+            end
+            return string.format("%08x%08x", h, h2)
+        end
+
+
+        http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
+            if not success then
+                if retryLeft > 0 then
+                    local delay   = 2 ^ (maxRetries - retryLeft + 1)
+                    local errCode = tostring(result or "NIL")
+                    _G.AkmodNotify("Kết nối gặp sự cố [" .. netLabel .. "] (Mã: " .. errCode .. "). Thử lại sau " .. delay .. "s...")
+                    local ok_t, time_ticker = pcall(require, "common.time_ticker")
+                    if ok_t and time_ticker and time_ticker.AddTimerOnce then
+                        time_ticker.AddTimerOnce(delay, function() DoRequest(retryLeft - 1) end)
+                    else
+                        DoRequest(retryLeft - 1)
+                    end
+                else
+                    _G.AkmodNotify("Kết nối thất bại [" .. netLabel .. "]. Mã lỗi: " .. tostring(result or "NIL"))
+                end
+                return
+            end
+
+            if not data or data == "" then
+                _G.AkmodNotify("Từ chối: Không có dữ liệu trả về từ server")
+                return
+            end
+
+            local rawData = data
+            if not data:find('{"status"', 1, true) then
+                local unpacked = EngineUnpack(data)
+                if unpacked and unpacked:find('{"status"', 1, true) then
+                    rawData = unpacked
+                end
+            end
+
+            local sData = tostring(rawData)
+
+            local statusVal = sData:match('"status"%s*:%s*(true)') or sData:match('"status"%s*:%s*(1[^%d])')
+            local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
+
+            if statusVal then
+                local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
+                local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
+                local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
+
+                local sigOk = false
+                if sigVal and tokenVal and rngVal then
+                    local expectedSig = SimpleHMAC(tokenVal .. rngVal .. hwid, _sw)
+                    if sigVal == expectedSig then
+                        sigOk = true
+                    end
+                end
+
+                if not sigOk then
+                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (Lỗi: HMAC_V99)")
+                    _G._Authenticated_ = false
+                    return
+                end
+
+                _G._Authenticated_ = true                
+                ForceStart()
+                
+                local notice = reasonVal or "Xác thực Key thành công!"
+                _G.AkmodNotify(notice)
+            else
+                local errMsg = reasonVal or "Key hoặc thiết bị không hợp lệ!"
+                _G.AkmodNotify("Từ chối: " .. errMsg)
+            end
+        end, 30)
+    end
+
+    DoRequest(maxRetries)
 end
 
+-- Kích nổ tự động
 pcall(function() 
-    require("common.time_ticker").AddTimerOnce(0.5, InitAllModSystems) 
+    local ok_t, time_ticker = pcall(require, "common.time_ticker")
+    if ok_t and time_ticker and time_ticker.AddTimerOnce then
+        time_ticker.AddTimerOnce(1.0, LoadCloud) 
+    end
 end)
