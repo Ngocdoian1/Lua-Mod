@@ -416,6 +416,7 @@ function _G.InitModMenuTab()
         }
         table.insert(SettingCatalog, 1, SettingPageDefine.ModMenu)
 
+
     end
 end
 
@@ -493,6 +494,9 @@ end
 -- LOGIC MỞ KHÓA 165 FPS VÀ UI IPAD VIEW 
 -- ========================================== 
 local function InitializeGraphicsUnlock()
+    if _G.ngocdoianState.GraphicsUnlocked then return end 
+    pcall(function()
+        local SettingCfg = require("client.logic.setting.setting_config")
 
     pcall(function()
         local SettingCfg = require("client.logic.setting.setting_config")
@@ -1758,6 +1762,7 @@ local function MainLoop()
                         if _G.ngocdoianConfig.AutoHead then
                             pcall(function() entity.AutoAimingConfig.Bones = { "Head", "Head", "Head" } end)
                             end
+                            end
                     entity.ngocdoianWeaponModsActive = true
 
                 elseif entity.ngocdoianWeaponModsActive then
@@ -2640,7 +2645,7 @@ local function MainLoop()
             end)
         end
 
-    end)
+    end
 end
 
 _G.ngocdoianState.LoopToken = (_G.ngocdoianState.LoopToken or 0) + 1 
