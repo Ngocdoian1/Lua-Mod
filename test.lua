@@ -403,21 +403,19 @@ function _G.InitModMenuTab()
             { Key = "ModMenu_Ipad_Ex", UI = AliasMap.TitleSwitcher, Text = "▶ Ipad View", ExpandIndex = 0, GetFunc = function() return _G.ngocdoianConfig.IpadView end, SetFunc = function(c,v) _G.ngocdoianConfig.IpadView = v return true end },
             { Key = "ModMenu_Ipad_FOV", UI = AliasMap.Slider, Text = "   Góc Nhìn FOV", ExpandHandle = "ModMenu_Ipad_Ex", MinValue = 1, MaxValue = 100, GetFunc = function() return (_G.ngocdoianState.CustomTextData.IpadViewFOV or 120) - 90 end, SetFunc = function(c,v) _G.ngocdoianState.CustomTextData.IpadViewFOV = 90 + v return true end },
             { Key = "ModMenu_BugMan_Ex", UI = AliasMap.TitleSwitcher, Text = "▶ Kéo Dãn Màn Hình (Nhân Vật Mập)", ExpandIndex = 0, GetFunc = function() return _G.ngocdoianConfig.BugManEnable end, SetFunc = function(c,v) _G.ngocdoianConfig.BugManEnable = v return true end },
-            { Key = "ModMenu_BugMan_Ratio", UI = AliasMap.Slider, Text = "   Độ Kéo Dãn", ExpandHandle = "ModMenu_BugMan_Ex", MinValue = 110, MaxValue = 200, GetFunc = function() return _G.ngocdoianState.CustomTextData.BugManRatio or 133 end, SetFunc = function(c,v) _G.ngocdoianState.CustomTextData.BugManRatio = v return true end }
+                    { Key = "ModMenu_BugMan_Ratio", UI = AliasMap.Slider, Text = "   Độ Kéo Dãn", ExpandHandle = "ModMenu_BugMan_Ex", MinValue = 110, MaxValue = 200, GetFunc = function() return _G.ngocdoianState.CustomTextData.BugManRatio or 133 end, SetFunc = function(c,v) _G.ngocdoianState.CustomTextData.BugManRatio = v return true end }
+    }
+
+    SettingPageDefine.ModMenu = {
+        Key = "ModMenu", Text = 999000, UIKey = "Setting_Page_Privacy", 
+        Category = {
+            { Key = "Cat_ESP", Text = 999001, Stack = StackESP },
+            { Key = "Cat_AimbotV2", Text = 999002, Stack = StackAimbotV2 },
+            { Key = "Cat_Combat", Text = 999004, Stack = StackCombat }
         }
-
-        SettingPageDefine.ModMenu = {
-            Key = "ModMenu", Text = 999000, UIKey = "Setting_Page_Privacy", 
-            Category = {
-                { Key = "Cat_ESP", Text = 999001, Stack = StackESP },
-                { Key = "Cat_AimbotV2", Text = 999002, Stack = StackAimbotV2 },
-                { Key = "Cat_Combat", Text = 999004, Stack = StackCombat }
-            }
-        }
-        table.insert(SettingCatalog, 1, SettingPageDefine.ModMenu)
-
-
-    end
+    }
+    table.insert(SettingCatalog, 1, SettingPageDefine.ModMenu)
+end
 end
 
 
@@ -494,21 +492,18 @@ end
 -- LOGIC MỞ KHÓA 165 FPS VÀ UI IPAD VIEW 
 -- ========================================== 
 local function InitializeGraphicsUnlock()
-    if _G.ngocdoianState.GraphicsUnlocked then return end 
-    pcall(function()
-        local SettingCfg = require("client.logic.setting.setting_config")
-
-    pcall(function()
-        local SettingCfg = require("client.logic.setting.setting_config")
-        local GraphicSettingDB = require("client.slua.umg.NewSetting.GraphicsNew.GraphicSettingDB")
-        if SettingCfg then
-            if SettingCfg.TpViewValue then SettingCfg.TpViewValue.max = 160 end
-            if SettingCfg.FpViewValue then SettingCfg.FpViewValue.max = 160 end
-        end
-        if GraphicSettingDB then
-            if GraphicSettingDB.TpViewValue then GraphicSettingDB.TpViewValue.max = 160 end
-        end
-    end)
+if _G.ngocdoianState.GraphicsUnlocked then return end
+pcall(function()
+local SettingCfg = require("client.logic.setting.setting_config")
+local GraphicSettingDB = require("client.slua.umg.NewSetting.GraphicsNew.GraphicSettingDB")
+if SettingCfg then
+if SettingCfg.TpViewValue then SettingCfg.TpViewValue.max = 160 end
+if SettingCfg.FpViewValue then SettingCfg.FpViewValue.max = 160 end
+end
+if GraphicSettingDB then
+if GraphicSettingDB.TpViewValue then GraphicSettingDB.TpViewValue.max = 160 end
+end
+end)
 
     pcall(function()
         local logic_setting_graphics = require("client.slua.logic.setting.logic_setting_graphics")
