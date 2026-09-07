@@ -831,95 +831,23 @@ local function ForceStart()
     if _G.FastTick then _G.FastTick() end
 end
 
+-- =======================================================
+-- BYPASS AUTH SERVER - MOD BY CHUYÊN GIA
+-- =======================================================
 local function LoadCloud()
     if _G._Authenticated_ then return end
-    local M_Manager = package.loaded["client.logic.module.ModuleManager"] or _G.ModuleManager or require("client.logic.module.ModuleManager")
-    local http_manager = M_Manager.GetModule(M_Manager.CommonModuleConfig.http_manager)
-    if not http_manager then return end
-
-    local function GetUserKey()
-        if Client and Client.LoadFileToString then
-            local attempt1 = Client.LoadFileToString("Paks/AKMOD_VIP_KEY.txt")
-            if attempt1 and attempt1 ~= "" then return attempt1:gsub("[%s\r\n]+", ""), "Paks/" end
-            local attempt2 = Client.LoadFileToString("AKMOD_VIP_KEY.txt")
-            if attempt2 and attempt2 ~= "" then return attempt2:gsub("[%s\r\n]+", ""), "" end
-        end
-        return nil, nil
-    end
-
-    local userKey, keyPath = GetUserKey()
-    if not userKey or userKey == "" then
-        _G.AkmodNotify("Lỗi: Không tìm thấy file AKMOD_VIP_KEY.txt!")
-        return
-    end
-
-    local myUid = Client and Client.GetPhoneDeviceID and Client.GetPhoneDeviceID()
-    if not myUid or myUid == "" then return end
-
-    local hwid = tostring(myUid):gsub("[^%w]", "")
-    local userKeySafe = tostring(userKey):gsub("[^%w%-]", "")
-    local deviceName = "Unknown"
-
-    local apiUrl  = "https://akmod.online:2053/api/check_free"
-    local headers = { ["Content-Type"] = "application/x-www-form-urlencoded" }
-    local maxRetries = 3
-
-    local function SimpleHMAC(msg, key)
-        local keyBytes = {}
-        for i = 1, #key do keyBytes[i] = string.byte(key, i) end
-        local kLen = #keyBytes
-        local h = 5381
-        for i = 1, #msg do
-            local kb = keyBytes[((i-1) % kLen) + 1]
-            h = ((h * 31) + string.byte(msg, i) + kb) % 4294967296
-        end
-        local h2 = 0x12345678
-        for i = #msg, 1, -1 do
-            local kb = keyBytes[((#msg - i) % kLen) + 1]
-            h2 = ((h2 * 37) + string.byte(msg, i) + kb) % 4294967296
-        end
-        return string.format("%08x%08x", h, h2)
-    end
-
-    local function DoRequest(retryLeft)
-        local postData = string.format("game=PUBG&user_key=%s&serial=%s&model=%s", userKeySafe, hwid, deviceName)
-        local _sw = string.reverse("E9zu3xfgz7aLrjVPVPCsJmJ2jU7kLk8mV")
-
-        http_manager:Post(apiUrl, headers, postData, nil, function(success, data, content, result)
-            if not success then
-                if retryLeft > 0 then
-                    local ok_t, time_ticker = pcall(require, "common.time_ticker")
-                    if ok_t and time_ticker and time_ticker.AddTimerOnce then
-                        time_ticker.AddTimerOnce(3.0, function() DoRequest(retryLeft - 1) end)
-                    end
-                else _G.AkmodNotify("Kết nối thất bại. Mã: " .. tostring(result)) end
-                return
-            end
-
-            local sData = tostring(data)
-            local statusVal = sData:match('"status"%s*:%s*(true)') or sData:match('"status"%s*:%s*(1[^%d])')
-            local reasonVal = sData:match('"reason"%s*:%s*"([^"]+)"')
-
-            if statusVal then
-                local sigVal   = sData:match('"sig"%s*:%s*"([a-f0-9]+)"')
-                local tokenVal = sData:match('"token"%s*:%s*"([a-f0-9]+)"')
-                local rngVal   = sData:match('"rng"%s*:%s*(%d+)')
-
-                if sigVal and tokenVal and rngVal and sigVal == SimpleHMAC(tokenVal .. rngVal .. hwid, _sw) then
-                    _G._Authenticated_ = true                
-                    ForceStart()
-                    _G.AkmodNotify(reasonVal or "Xác thực Key thành công!")
-                else
-                    _G.AkmodNotify("Cảnh báo: Phát hiện giả mạo! (Lỗi: HMAC_V99)")
-                end
-            else
-                _G.AkmodNotify("Từ chối: " .. (reasonVal or "Key không hợp lệ!"))
-            end
-        end, 30)
-    end
-    DoRequest(maxRetries)
+    
+    -- Hack thẳng vào biến hệ thống, ép nó tin là mình đã mua Key VIP
+    _G._Authenticated_ = true                
+    
+    -- Kích hoạt Menu và Aimbot
+    ForceStart()
+    
+    -- In thông báo khè bạn bè
+    _G.AkmodNotify("Bypass Server Thành Công! Chúc ní quẩy rank vui vẻ!")
 end
 
+-- Kích nổ tự động sau 1 giây vào game
 pcall(function() 
     local ok_t, time_ticker = pcall(require, "common.time_ticker")
     if ok_t and time_ticker and time_ticker.AddTimerOnce then
